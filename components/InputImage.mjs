@@ -68,6 +68,7 @@ class Job {
       size: this.parent.inputFile.value.size,
       captured: this.parent.inputFile.value.lastModified
     }
+    if (this.parent.props.data.id) body.id = this.parent.props.data.id;
     let options = {
       method: 'PUT',
       credentials: 'same-origin',
