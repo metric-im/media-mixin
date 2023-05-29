@@ -37,9 +37,9 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.get('/media/image/id/:id',async (req,res)=> {
+    router.get('/media/image/id/*',async (req,res)=> {
       try {
-        let item = await this.collection.findOne({_id:req.params.id});
+        let item = await this.collection.findOne({_id:req.params[0]});
         if (!item) res.status(404).send();
         let cropId = this.getImageCropId(Object.assign({},item.options,req.query));
         res.set('Content-Type', 'image/png');
