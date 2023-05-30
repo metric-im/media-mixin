@@ -23,7 +23,7 @@ input[type=file] {
 }
 .drop-box IMG {
     width:100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 .drop-box .file-profile {
     flex:1 1;

@@ -4,6 +4,7 @@ export default class InputImage extends Component {
   constructor(props) {
     super(props);
     this.server = this.props.server || 'aws'; // default to S3, the other option is 'storj'
+    this.id = `${this.props.collection?this.props.collection+'/':''}${this.props.data._id}.${this.props.name}`;
   }
   async render(element) {
     await super.render(element);
@@ -11,6 +12,8 @@ export default class InputImage extends Component {
     this.formBody = this.div('form-body',this.imageBox);
     this.progressDisplay = this.div('progress-display',this.formBody);
     this.inputFile = await this.draw(InputFile,{data:this.props.data,name:"icon",title:this.props.title,accept:"image/*"},this.formBody);
+    this.imageRender = document.createElement('img');
+    this.imageRender.src = '/media/image/id/' + this.id;
   }
   get value() {
     return this.inputFile.value;
@@ -34,6 +37,7 @@ class Job {
   constructor(parent) {
     this.parent = parent;
     this.status = Job.NEW;
+    this.id
   }
   static NEW = 1;
   static UPLOAD = 2;
@@ -48,6 +52,8 @@ class Job {
     this.progressBar = document.createElement("div")
     this.progressBar.classList.add('progress');
     this.element.append(this.progressBar);
+    this.imageElement = document.createElement('img');
+    this.imageElement.src = `/media/${this.props.collection}`
     hostElement.append(this.element);
   }
   destroy(wait=1000) {
@@ -59,16 +65,16 @@ class Job {
   }
 
   /**
-   * An upload is first staged to declare the metadata and receive an id.
+   * An upload is first staged to declare the metadata and track progress.
    * @returns {Promise<void>}
    */
   async stage() {
     let body = {
+      _id:`${this.parent.props.collection?this.parent.props.collection+'/':''}${this.parent.props.data._id}.${this.parent.props.name}`,
       type: this.parent.inputFile.value.type,
       size: this.parent.inputFile.value.size,
       captured: this.parent.inputFile.value.lastModified
     }
-    if (this.parent.props.data.id) body.id = this.parent.props.data.id;
     let options = {
       method: 'PUT',
       credentials: 'same-origin',
@@ -100,6 +106,7 @@ class Job {
       xhr.send(formData);
       xhr.onload = (e) => {
         this.status = Job.SUCCESS;
+        this.parent.imageRender.src = e.target.url;
         this.destroy();
       };
     } catch(error) {

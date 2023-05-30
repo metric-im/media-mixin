@@ -9,6 +9,7 @@ import fileUpload from 'express-fileupload';
 import Componentry from "@metric-im/componentry";
 import Jimp from 'jimp';
 import {PutObjectCommand, GetObjectCommand, HeadObjectCommand} from '@aws-sdk/client-s3';
+import crypto from "crypto";
 
 export default class MediaMixin extends Componentry.Module {
   constructor(connector) {
@@ -27,10 +28,11 @@ export default class MediaMixin extends Componentry.Module {
     router.use(fileUpload({ limit: 200 * 1024 * 1024 }));
     router.get('/media/image/url/*', async (req, res) => {
       try {
-        res.set('Content-Type', 'image/jpg');
+        res.set('Content-Type', 'image/png');
+        let key = crypto.createHash('md5').update(req.params[0]).digest('hex');
         let buffer = await Jimp.read('https://'+req.params[0]);
-        let spec = await this.processSpec(buffer,req.query);
-        let image = await this.processBuffer(buffer,spec);
+        let spec = new Spec(key,req.query);
+        let image = await spec.process(buffer);
         res.send(image);
       } catch (e) {
         console.error(e);
@@ -40,19 +42,24 @@ export default class MediaMixin extends Componentry.Module {
     router.get('/media/image/id/*',async (req,res)=> {
       try {
         let item = await this.collection.findOne({_id:req.params[0]});
-        if (!item) res.status(404).send();
-        let cropId = this.getImageCropId(Object.assign({},item.options,req.query));
+        if (!item) return res.status(404).send();
+        let spec = new Spec(req.params[0],req.query);
         res.set('Content-Type', 'image/png');
         if (item.system === 'aws') {
           try {
-            let test = new GetObjectCommand({Bucket:'bluefire','Key':`media/${req.params.id}.${cropId}.${item.type}`})
+            let test = new GetObjectCommand({Bucket:'bluefire','Key':spec.path})
             let response = await this.connector.profile.S3Client.send(test);
             response.Body.pipe(res);
           } catch(e) {
             Jimp.read(item.url,async (error,buffer)=>{
               if (error) throw error;
-              let spec = await this.processSpec(buffer,req.query);
-              let image = await this.processBuffer(buffer,spec);
+              let image = await spec.process(buffer);
+              let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
+                Bucket:this.connector.profile.aws.s3_bucket,
+                Key:spec.path,
+                ContentType: 'image/png',
+                Body: image
+              }))
               let data = Buffer.from(image, 'base64');
               res.send(data);
             });
@@ -65,49 +72,45 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     })
-    router.put("/media/stage/:system/:id?",async (req,res) => {
+    router.put("/media/stage/:system",async (req,res) => {
       try {
-        let id = req.body._id;
-        if (!id) id = req.params.id || this.connector.idForge.datedId();
+        if (!req.body._id) req.body._id = this.connector.idForge.datedId();
         let ext = req.body.type.split('/')[1]
-        let fileId = id + "." + ext;
         let modifier = {
           $set:{
-            type:ext.toLowerCase(),
-            file:fileId,
+            file:req.body._id + '.' + ext,
             type:req.body.type,
             size:req.body.size,
-            captured:req.body.captured,
             system:req.params.system,
             status:"staged",
             _modified:new Date()
           },
           $setOnInsert:{
-            _id:id,
             _created:new Date()
           }
         }
+        if (req.body.captured) modifier.$set.captured = req.body.captured;
         if (req.account) modifier.$setOnInsert._createdBy = req.account._id;
-        let result = await this.collection.findOneAndUpdate({_id:id},modifier,{upsert:true});
-        res.json({_id:id,status:'staged'});
+        let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
+        res.json({_id:req.body._id,status:'staged'});
       } catch (e) {
         console.error(e);
         res.status(500).send();
       }
     })
 
-    router.put('/media/upload/:id',async (req,res)=>{
+    router.put('/media/upload/*',async (req,res)=>{
       try {
-        let mediaItem = await this.collection.findOne({_id:req.params.id},);
-        if (!mediaItem) return res.status(400).send(`${req.params.id} has not been staged`);
+        let mediaItem = await this.collection.findOne({_id:req.params[0]},);
+        if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
         let buffer = req.files.file.data;
-        let file = `${mediaItem._id}.${mediaItem.type}`;
         mediaItem.type = req.files.file.mimetype; // staged type is ignored. It is there for troubleshooting
+        let file = `${mediaItem._id}.${mediaItem.type.split('/')[1]}`;
         // Normalize images into PNG and capture initial crop spec
         if (['image/jpeg','image/jpg','image/png','image/bmp','image/gif'].includes(mediaItem.type)) {
           buffer = await Jimp.read(buffer).then(async (image)=>{
-            let spec = this.processSpec(req.query);
-            image = await this.processImage(image,spec)
+            let spec = new Spec(mediaItem._id,req.query);
+            image = await spec.process(image);
             mediaItem.type = 'image/png';
             file = `${mediaItem._id}.png`;
             return image;
@@ -122,7 +125,7 @@ export default class MediaMixin extends Componentry.Module {
           }))
           let url = `https://${this.connector.profile.aws.s3_bucket}.s3.${this.connector.profile.aws.s3_region}.amazonaws.com/media/${file}`;
           await this.collection.findOneAndUpdate({_id:mediaItem._id},{$set:{status:'live',url:url,type:mediaItem.type,file:file}});
-          res.status(200).json({_id:req.params.id,status:'success'});
+          res.status(200).json({_id:req.params.id,url:url,status:'success'});
         } else if (mediaItem.system === 'storj') {
           res.status(400).send('not implemented');
         }
@@ -133,77 +136,51 @@ export default class MediaMixin extends Componentry.Module {
     })
     return router;
   }
-
-  /**
-   * Normalize the query string parameters into a consistent object
-   * @param options
-   * @returns {{mode: string, scale: any, crop: *}}
-   */
-  processSpec(options={}) {
-    if (options.mode && !['contain','cover'].includes(options.mode)) options.mode = null;
-    let spec = {
-      crop:options.crop, // left %, top %, width %, height %
-      scale:options.scale, // width , height
-      mode:options.mode || 'cover' // contain or cover
-    };
-    return spec;
-  }
-
-  /**
-   * Construct a url safe string from the spec object for use in the file name qualifier
-   * @param spec
-   * @returns {string}
-   */
-  serializeSpec(spec) {
-    let str = [];
-    for (let [key,value] of Object.entries(spec)) {
-      str.push(encodeURIComponent(key)+"="+encodeURIComponent(value||''))
+}
+class Spec {
+  constructor(key,query) {
+    this.isEmpty = true;
+    this.key = key;
+    if (query.crop) {
+      let data = query.crop.split(',');
+      this.crop = {x:parseInt(data[0]),y:parseInt(data[1]),w:parseInt(data[2]),h:parseInt(data[3])};
+      this.isEmpty = false;
     }
+    if (query.scale) {
+      let data = query.scale.split(',');
+      this.scale = {w:parseInt(data[0]),h:parseInt(data[1])};
+      this.isEmpty = false;
+    }
+    if (['contain','cover','resize','scaleToFit'].includes(query.mode)) {
+      this.mode = query.mode;
+    } else {
+      this.mode = 'cover';
+    }
+  }
+  toString() {
+    let str = [];
+    if (this.scale) str.push(`scale=${this.scale.w},${this.scale.h}`);
+    if (this.crop) str.push(`crop=${this.crop.x},${this.crop.y},${this.crop.w},${this.crop.h}`);
+    if (this.mode) str.push(`mode=${this.mode}`);
     return str.join('&');
   }
-
-  /**
-   * Parse the serialized spec into an object for image processing.
-   * @param str
-   */
-  deserializeSpec(str) {
-    let up =  new URLSearchParams(str);
-    let spec = {
-      crop:up.get('crop'),
-      scale:up.get('scale'),
-      mode:up.get('mode')
-    }
-    if (spec.crop) {
-      let data = spec.crop.split(',');
-      spec.crop.x = data[0];
-      spec.crop.y = data[1];
-      spec.crop.w = data[2];
-      spec.crop.h = data[3];
-    }
-    if (spec.scale) {
-      let data = spec.scale.split(',');
-      spec.scale.w = data[0];
-      spec.scale.h = data[1];
-    }
+  get path() {
+    return 'media/'+this.key+(!this.isEmpty?'.'+this.toString():'')+'.png';
   }
-
-  /**
-   * Apply image adjustments from the given spec.
-   * @param image
-   * @param spec
-   * @returns {Promise<unknown>}
-   */
-  async processImage(image, spec) {
+  get rootPath() {
+    return 'media/'+this.key+'.png';
+  }
+  async process(image) {
     return new Promise((resolve, reject) => {
       try {
-        if (spec.scale) {
-          image.scaleToFit(spec.scale.w,spec.scale.h);
+        if (this.scale) {
+          image[this.mode](this.scale.w,this.scale.h);
         }
-        if (spec.crop) {
-          let x = image.bitmap.width * (spec.crop.x/100);
-          let y = image.bitmap.height * (spec.crop.y/100);
-          let w = image.bitmap.width * (spec.crop.w/100);
-          let h = image.bitmap.height * (spec.crop.h/100);
+        if (this.crop) {
+          let x = image.bitmap.width * (this.crop.x/100);
+          let y = image.bitmap.height * (this.crop.y/100);
+          let w = image.bitmap.width * (this.crop.w/100);
+          let h = image.bitmap.height * (this.crop.h/100);
           image.crop(x,y,w,h);
         }
         return image.getBuffer(Jimp.MIME_PNG, function (err, img) {

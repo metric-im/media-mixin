@@ -1,39 +1,72 @@
-# Samizdat Studio
+# Metric Media Mixin Studio
 
-On demand customized serving for image assets. Studio will serve images tailored to the target environment.
+Blob storage for metric apps. This is optimized for image uploads, but should adapt for all file types.
 
-The studio takes an image url and rendering specs. As the request is likely to re-issued many times, we
-store the manipulated image using a hash so it needn't be reprocessed.
-
-The capability is useful to open sites such as samizdatonline.org. A simple apikey and origin white-listing
-should be enough to secure access.
-
->NOTE: we may want to give it a unique url.
+The module takes a url or local file along with rendering specs if desired. As the request is likely to
+be re-issued many times, we store the manipulated data and retrieve it when specs match.
 
 ## File Structure and Deployment
 
-The studio should be a plugin component using componentry. We may initially simply include it with
-admin.samizdat.online, but anticipate that it may be easiest if run standalone with its own harness.
-
 * **index.mjs** - entry point for module inclusion
-* **app.mjs** - standalone web app
-* **server/Studio.mjs** - image manipulation functions
-* **profile.mjs** - Should include StorJ access and any other resources
+* **app.mjs** - standalone web app (needs to be revisited)
+* **profile.mjs** - Should include AWS and StorJ access and any other resources
+* **/components/InputFile** - InputFile is a root element that could migrate to common
+* **/components/InputImage** the shared page element for rendering and uploading images
 
-## Studio API
+## API
 
-This will return the image sized and scaled to the given width and height
-```
-https://admin.samizdat.online/api/studio/cdn.cnn.com/cnnnext/dam/assets/221116205801-white-house-file-restricted-large-tease.jpg?crop=200x300
-```
+The API resides under `/media`. It ingests new objects from a url or local file and serves them to spec.
 
-This will return the image cropped at 200 by 300 pixels with left at 400 and top at 350 pixels.
-By specifying the `position` we force the boxing to be fixed rather than relative to the original image
-```
-https://admin.samizdat.online/api/studio/cdn.cnn.com/cnnnext/dam/assets/221116205801-white-house-file-restricted-large-tease.jpg?crop=200x300&position=400,350
-```
+Uploads are first declared with `/media/stage/[aws|storj]` and then fulfilled with `/media/upload`. Stage
+stores the metadata of the file and allows for progress tracking. 
 
-## Notes
+`/media/image/:id` retrieves the image with optional crops and scaling.
 
-This code is incomplete. A hashing a caching mechanism using storj needs to be implemented. Authentication controls
-are missing. It is not tested and mey need to be adapted to the specific needs of samizdat.
+### Common Options
+
+When getting or putting a file, options can be provided in the query string. Files are PUT with a
+root name, but when the same file is requested with the same options, a copy is saved for efficiency.
+
+These options can be used together. Scale takes precedence for performance.
+
+| name | value                                                                         |
+| --- |-------------------------------------------------------------------------------|
+| scale | Absolute pixel width provided as width,height. `&scale=900,600`               |
+| crop | Relative cropping, in percents: left, top, width, height. `&crop=20,20,60,60` |
+| mode | Scaling can be treated in numerous ways. We support contain, cover, resize and scaleToFit. The default is "cover" See the Jimp docs: https://www.npmjs.com/package/jimp |
+
+### PUT /media/stage/:system
+
+Declare an upload. This establishes a media record with an ID. The body attributes are:
+
+| name | description                                                                                                                                                                             |
+|------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| _id  | The Identifier should be `collection/objectid`. Or props.collection/props.data._id. If left blank, an id is generated. This format ensure uniqueness and organizes the storage structure|
+| type | Mime type of the file                                                                                                                                                                   |
+| size | Byte size of the file                                                                                                                                                                   |
+| captured | (optional) The creation date of the original file when uploaded locally                                                                                                             |
+
+This is recorded in the `media` collection of the database
+
+### PUT /media/upload/:id
+
+`id` must match a currently staged upload file. The route expects a body object with files declared.
+It only processes one file as currently implemented. Once the upload is complete the file is written
+to the storage system with the given ID and mime-type extension. The database record is updated from
+'staged' to 'live'
+
+### GET /media/image/id/:id
+
+The given request, id and options, is searched and returned if available, or rendered based on the original upload.
+
+### GET /media/image/url/:url
+
+`url` is any url, not including the protocol string. The url will be fetched, modified if requested and stored
+with a hashed id in the `/media` root folder. The hashed id can be used to retrieve the same request without
+new processing.
+
+>NOTE: this is not entirely implemented.
+
+## NOTES
+
+* we need to delete all renderings associated with a root file when the origin is re-uploaded
