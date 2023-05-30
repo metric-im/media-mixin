@@ -67,6 +67,31 @@ new processing.
 
 >NOTE: this is not entirely implemented.
 
+## Examples
+
+From a host component:
+```javascript
+    this.inputImage = await this.draw(InputImage,{
+      data:this.item,
+      collection:'publisher',
+      name:"icon",
+      title:"icon",
+      accept:"image/*"
+    },propertySet);
+```
+
+collection / data._id will be the media object id. So if data._id is "asdf"
+
+```http request
+/media/publisher/asdf
+```
+
+and if modifications are required
+
+```http request
+/media/publisher/asdf?scale=900,600
+```
+
 ## NOTES
 
 * we need to delete all renderings associated with a root file when the origin is re-uploaded
