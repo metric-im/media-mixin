@@ -4,16 +4,21 @@ export default class InputImage extends Component {
   constructor(props) {
     super(props);
     this.server = this.props.server || 'aws'; // default to S3, the other option is 'storj'
-    this.id = `${this.props.collection?this.props.collection+'/':''}${this.props.data._id}.${this.props.name}`;
   }
   async render(element) {
     await super.render(element);
+    if (this.props.data._id) {
+      this.id = `${this.props.collection?this.props.collection+'/':''}${this.props.data._id}.${this.props.name}`;
+    }
     this.imageBox = this.div('input-image');
     this.formBody = this.div('form-body',this.imageBox);
     this.progressDisplay = this.div('progress-display',this.formBody);
     this.inputFile = await this.draw(InputFile,{data:this.props.data,name:"icon",title:this.props.title,accept:"image/*"},this.formBody);
-    this.imageRender = document.createElement('img');
-    this.imageRender.src = '/media/image/id/' + this.id;
+    if (this.id) {
+      this.imageRender = document.createElement('img');
+      this.imageRender.src = `/media/image/id/${this.id}`;
+      this.inputFile.drawContent(this.imageRender);
+    }
   }
   get value() {
     return this.inputFile.value;
@@ -52,8 +57,6 @@ class Job {
     this.progressBar = document.createElement("div")
     this.progressBar.classList.add('progress');
     this.element.append(this.progressBar);
-    this.imageElement = document.createElement('img');
-    this.imageElement.src = `/media/${this.props.collection}`
     hostElement.append(this.element);
   }
   destroy(wait=1000) {
@@ -70,7 +73,7 @@ class Job {
    */
   async stage() {
     let body = {
-      _id:`${this.parent.props.collection?this.parent.props.collection+'/':''}${this.parent.props.data._id}.${this.parent.props.name}`,
+      _id:`${this.parent.id}`,
       type: this.parent.inputFile.value.type,
       size: this.parent.inputFile.value.size,
       captured: this.parent.inputFile.value.lastModified
@@ -102,7 +105,8 @@ class Job {
       xhr.upload.onprogress = (e) => {
         this.progressBar.style.left = ((e.loaded / e.total) * 100)+"%";
       };
-      xhr.open("PUT", "/media/upload/" + stageResult._id);
+      let options = this.parent.props.options?`?${this.parent.props.options}`:'';
+      xhr.open("PUT", "/media/upload/" + stageResult._id + options);
       xhr.send(formData);
       xhr.onload = (e) => {
         this.status = Job.SUCCESS;

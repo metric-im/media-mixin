@@ -7,13 +7,18 @@ input[type=file] {
     height:30vw;
 }
 .drop-box {
+    position:relative;
     display:flex;
     align-items: center;
     text-align:center;
     border:3px dashed var(--page-border);
     height:10vw;
-    width:100%;
+    width:10vw;
     cursor:pointer;
+}
+.drop-box IMG {
+    width:100%;
+    object-fit: contain;
 }
 .drop-box .icon {
     flex:1 1;

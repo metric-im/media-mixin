@@ -71,22 +71,34 @@ new processing.
 
 From a host component:
 ```javascript
-    this.inputImage = await this.draw(InputImage,{
-      data:this.item,
-      collection:'publisher',
-      name:"icon",
-      title:"icon",
-      accept:"image/*"
-    },propertySet);
-```
+import Componentry from '@metric-im/componentry';
+import CommonMixin from '@metric-im/common-mixin';
+import MediaMixin from '../metric-im/media-mixin/index.mjs';
+import InputImage from "./InputImage.mjs";
 
-collection / data._id will be the media object id. So if data._id is "asdf"
+let componentry = new Componentry(app,await Profile());
+await componentry.init(MediaMixin,CommonMixin);
+
+this.inputImage = await this.draw(InputImage,{
+  data:this.item,
+  collection:'publisher',
+  name:"icon",
+  title:"icon",
+  options:"scale=400,400"
+},this.element);
+```
+>NOTE: For prerelease integration, componentry elements can be referenced with a relative path
+
+Collection and options are optional. "Collection" provides a preface to the image path.
+"Options" allows the original image to be processed before being saved as the root path.
+
+collection / data._id will be the media object id. So if data._id is "asdf"...
 
 ```http request
 /media/publisher/asdf
 ```
 
-and if modifications are required
+and if modifications are required...
 
 ```http request
 /media/publisher/asdf?scale=900,600

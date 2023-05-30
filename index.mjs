@@ -51,18 +51,20 @@ export default class MediaMixin extends Componentry.Module {
             let response = await this.connector.profile.S3Client.send(test);
             response.Body.pipe(res);
           } catch(e) {
-            Jimp.read(item.url,async (error,buffer)=>{
-              if (error) throw error;
-              let image = await spec.process(buffer);
-              let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
+            Jimp.read(spec.rootPath).then((buffer)=> {
+              return spec.process(buffer);
+            }).then(async (image)=>{
+              await this.connector.profile.S3Client.send(new PutObjectCommand({
                 Bucket:this.connector.profile.aws.s3_bucket,
                 Key:spec.path,
                 ContentType: 'image/png',
                 Body: image
-              }))
+              }));
               let data = Buffer.from(image, 'base64');
               res.send(data);
-            });
+            }).catch((error)=>{
+              res.status(404).send();
+            })
           }
         } else if (item.system === 'storj') {
           res.status(400).send("not implemented")

@@ -2,35 +2,3 @@
     flex:0 0;
     border:1px solid var(--bg-color);
 }
-input[type=file] {
-    display:none;
-    height:30vw;
-}
-.drop-box {
-    position:relative;
-    display:flex;
-    align-items: center;
-    text-align:center;
-    border:3px dashed var(--page-border);
-    height:10vw;
-    width:10vw;
-    cursor:pointer;
-}
-.drop-box .icon {
-    flex:1 1;
-    font-size:3em;
-    opacity:.5;
-}
-.drop-box IMG {
-    width:100%;
-    object-fit: contain;
-}
-.drop-box .file-profile {
-    flex:1 1;
-    margin:var(--spacer);
-    font-size:0.8em;
-    overflow:hidden;
-}
-.file-name {
-    font-weight:bold;
-}

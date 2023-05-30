@@ -42,11 +42,11 @@ export default class InputFile extends Component {
         event.preventDefault();
     }
     drawFile() {
+        if (!this.file) return;
         let displayType = this.file.type.split('/')[0];
         if (displayType === 'image') {
             this.dropBox.innerHTML = '';
             let imagePreview = document.createElement('IMG');
-            imagePreview.classList.add('image-preview');
             this.dropBox.append(imagePreview);
             const imageSrc = URL.createObjectURL(this.file)
             imagePreview.src = imageSrc;
@@ -56,6 +56,10 @@ export default class InputFile extends Component {
             let type = "<div class='file-type'>"+this.file.type+"</div>";
             this.dropBox.innerHTML = "<div class='file-profile'>" + name + size + type + "</div>";
         }
+    }
+    drawContent(content) {
+        this.dropBox.innerHTML = '';
+        this.dropBox.append(content);
     }
     get value() {
         return this.file;
