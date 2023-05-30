@@ -14,9 +14,12 @@ export default class InputImage extends Component {
     this.formBody = this.div('form-body',this.imageBox);
     this.progressDisplay = this.div('progress-display',this.formBody);
     this.inputFile = await this.draw(InputFile,{data:this.props.data,name:"icon",title:this.props.title,accept:"image/*"},this.formBody);
+    this.updateImage();
+  }
+  updateImage() {
     if (this.id) {
       this.imageRender = document.createElement('img');
-      this.imageRender.src = `/media/image/id/${this.id}`;
+      this.imageRender.src = `/media/image/id/${this.id}?t=${Date.now()}`;
       this.inputFile.drawContent(this.imageRender);
     }
   }
@@ -42,7 +45,6 @@ class Job {
   constructor(parent) {
     this.parent = parent;
     this.status = Job.NEW;
-    this.id
   }
   static NEW = 1;
   static UPLOAD = 2;
@@ -110,7 +112,7 @@ class Job {
       xhr.send(formData);
       xhr.onload = (e) => {
         this.status = Job.SUCCESS;
-        this.parent.imageRender.src = e.target.url;
+        this.parent.updateImage();
         this.destroy();
       };
     } catch(error) {
