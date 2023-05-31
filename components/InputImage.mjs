@@ -19,7 +19,7 @@ export default class InputImage extends Component {
   updateImage() {
     if (this.id) {
       this.imageRender = document.createElement('img');
-      this.imageRender.src = `/media/image/id/${this.id}?t=${Date.now()}`;
+      this.imageRender.src = `/media/image/id/${this.id}`;
       this.inputFile.drawContent(this.imageRender);
     }
   }
@@ -32,13 +32,6 @@ export default class InputImage extends Component {
     job.draw(this.progressDisplay);
     await job.stage();
     InputImage.jobs.push(job);
-  }
-
-  updateJobs() {
-    this.progressDisplay.innerHTML = "";
-    for (let job of Upload.jobs) {
-      this.progressDisplay.innerHTML += `<div>${job.id}</div>`;
-    }
   }
 }
 class Job {

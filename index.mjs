@@ -23,6 +23,9 @@ export default class MediaMixin extends Componentry.Module {
       "isBase64Encoded": false
     };
   }
+  setCollection(name) {
+    this.collection = this.connector.db.collection(name);
+  }
   routes() {
     let router = express.Router();
     router.use(fileUpload({ limit: 200 * 1024 * 1024 }));
@@ -47,7 +50,7 @@ export default class MediaMixin extends Componentry.Module {
         res.set('Content-Type', 'image/png');
         if (item.system === 'aws') {
           try {
-            let test = new GetObjectCommand({Bucket:'bluefire','Key':spec.path})
+            let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket,'Key':spec.path})
             let response = await this.connector.profile.S3Client.send(test);
             response.Body.pipe(res);
           } catch(e) {
