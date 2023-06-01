@@ -8,7 +8,11 @@ import express from 'express';
 import fileUpload from 'express-fileupload';
 import Componentry from "@metric-im/componentry";
 import Jimp from 'jimp';
-import {PutObjectCommand, GetObjectCommand, HeadObjectCommand} from '@aws-sdk/client-s3';
+import {
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsCommand} from '@aws-sdk/client-s3';
 import crypto from "crypto";
 
 export default class MediaMixin extends Componentry.Module {
@@ -122,6 +126,14 @@ export default class MediaMixin extends Componentry.Module {
           })
         }
         if (mediaItem.system === 'aws') {
+          let variants = await this.connector.profile.S3Client.send(new ListObjectsCommand({
+            Bucket:this.connector.profile.aws.s3_bucket,
+            Prefix:`media/${mediaItem._id}`,
+          }))
+          await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
+            Bucket:this.connector.profile.aws.s3_bucket,
+            Delete:{Objects:variants.Contents}
+          }));
           let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Key:`media/${file}`,

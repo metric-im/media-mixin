@@ -14,13 +14,19 @@ export default class InputImage extends Component {
     this.formBody = this.div('form-body',this.imageBox);
     this.progressDisplay = this.div('progress-display',this.formBody);
     this.inputFile = await this.draw(InputFile,{data:this.props.data,name:"icon",title:this.props.title,accept:"image/*"},this.formBody);
-    this.updateImage();
+    await this.updateImage();
   }
-  updateImage() {
+  async updateImage() {
     if (this.id) {
-      this.imageRender = document.createElement('img');
-      this.imageRender.src = `/media/image/id/${this.id}`;
-      this.inputFile.drawContent(this.imageRender);
+      let url = `/media/image/id/${this.id}`;
+      let test = await fetch(url);
+      if (test.ok) {
+        this.imageRender = document.createElement('img');
+        this.imageRender.src = url;
+        this.inputFile.drawContent(this.imageRender);
+      }
+    } else {
+      setTimeout(this.updateImage.bind(this),1000);
     }
   }
   get value() {
@@ -103,9 +109,9 @@ class Job {
       let options = this.parent.props.options?`?${this.parent.props.options}`:'';
       xhr.open("PUT", "/media/upload/" + stageResult._id + options);
       xhr.send(formData);
-      xhr.onload = (e) => {
+      xhr.onload = async (e) => {
         this.status = Job.SUCCESS;
-        this.parent.updateImage();
+        await this.parent.updateImage();
         this.destroy();
       };
     } catch(error) {
