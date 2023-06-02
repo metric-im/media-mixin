@@ -58,7 +58,7 @@ export default class MediaMixin extends Componentry.Module {
             let response = await this.connector.profile.S3Client.send(test);
             response.Body.pipe(res);
           } catch(e) {
-            Jimp.read(spec.rootPath).then((buffer)=> {
+            await Jimp.read(item.url).then((buffer)=> {
               return spec.process(buffer);
             }).then(async (image)=>{
               await this.connector.profile.S3Client.send(new PutObjectCommand({
@@ -126,14 +126,18 @@ export default class MediaMixin extends Componentry.Module {
           })
         }
         if (mediaItem.system === 'aws') {
+          // When the source image changes, delete prior variants, so they are reconstructed.
           let variants = await this.connector.profile.S3Client.send(new ListObjectsCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Prefix:`media/${mediaItem._id}`,
-          }))
-          await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
-            Bucket:this.connector.profile.aws.s3_bucket,
-            Delete:{Objects:variants.Contents}
           }));
+          if (variants.Contents && variants.Contents.length > 0) {
+            await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
+              Bucket:this.connector.profile.aws.s3_bucket,
+              Delete:{Objects:variants.Contents}
+            }));
+          }
+          // Post the new object
           let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Key:`media/${file}`,
