@@ -1,7 +1,6 @@
 . {
     position:absolute;
     flex:0 0;
-    border:1px solid var(--bg-color);
 }
 input[type=file] {
     display:none;
@@ -43,4 +42,48 @@ input[type=file] {
     z-index:100;
     height:200px;
     width:200px;
+}
+.file-loader {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.file-loader:before {
+    display: block;
+    content: "";
+    width: 70%;
+    height: 70%;
+    border: 3px solid transparent;
+    border-bottom-color: var(--action-color-hilite);
+    /* border-left-color: var(--action-color-hilite); */
+    border-radius: 50%;
+    display: inline-block;
+    box-sizing: border-box;
+    -webkit-animation: file-loader-rotation 1s linear infinite;
+    animation: file-loader-rotation 1s linear infinite;
+}
+@-webkit-keyframes file-loader-rotation {
+    0% {
+        -webkit-transform: rotate(0deg);
+        transform: rotate(0deg)
+    }
+
+    to {
+        -webkit-transform: rotate(1turn);
+        transform: rotate(1turn)
+    }
+}
+
+@keyframes file-loader-rotation {
+    0% {
+        -webkit-transform: rotate(0deg);
+        transform: rotate(0deg)
+    }
+
+    to {
+        -webkit-transform: rotate(1turn);
+        transform: rotate(1turn)
+    }
 }

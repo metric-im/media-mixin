@@ -3,7 +3,18 @@ import Component from './Component.mjs';
 export default class InputFile extends Component {
     constructor(props) {
         super(props);
+
         this.file = null;
+        this.disabled = false;
+
+        this._fileListener = void 0
+        this._textListener = void 0
+    }
+    setFileListener = (listener) => {
+        this._fileListener = listener
+    }
+    setTextListener = (textListener) => {
+        this._textListener = textListener
     }
     async render(element) {
         await super.render(element);
@@ -21,28 +32,45 @@ export default class InputFile extends Component {
             let val = Array.isArray(this.props.accept)?this.props.accept.join(','):this.props.accept;
             this.input.setAttribute('accept',val);
         }
+        this.input.addEventListener('change', this.changeHandler)
         this.dropBox.onclick = this.clickHandler.bind(this);
         this.element.append(this.input);
     }
     dropHandler(event) {
         event.preventDefault();
-        if (event.dataTransfer) {
-            this.file = event.dataTransfer.files[0];
-            this.drawFile();
+        if(this.disabled) return;
+        if(!event.dataTransfer) return;
+
+        const {types} = event.dataTransfer
+
+        if(types.includes("Files")) {
+            this.file = event.dataTransfer.files[0]
+            this.drawFile()
+            if(this._fileListener) this._fileListener(this.file)
+        } else if(types.includes("text/plain")) {
+            const text = event.dataTransfer.getData("text/plain")
+
+            if(this._textListener) this._textListener(text)
+        }
+    }
+    changeHandler = (event) => {
+        if(this.disabled) return;
+
+        this.file = this.input.files[0];
+        this.drawFile();
+        if(this._fileListener) {
+            this._fileListener(this.file)
         }
     }
     clickHandler(event) {
         this.input.click();
-        this.input.addEventListener('change',(event)=>{
-            this.file = this.input.files[0];
-            this.drawFile();
-        })
     }
     dragHandler(event) {
         event.preventDefault();
     }
     drawFile() {
         if (!this.file) return;
+
         let displayType = this.file.type.split('/')[0];
         if (displayType === 'image') {
             this.dropBox.innerHTML = '';
@@ -57,9 +85,16 @@ export default class InputFile extends Component {
             this.dropBox.innerHTML = "<div class='file-profile'>" + name + size + type + "</div>";
         }
     }
+    drawLoader() {
+        this.dropBox.innerHTML = "<div class='file-loader'></div>"
+    }
     drawContent(content) {
         this.dropBox.innerHTML = '';
-        this.dropBox.append(content);
+        if(content) {
+            this.dropBox.append(content);
+        } else {
+            this.dropBox.innerHTML = "<span class='icon icon-drop'></span>"
+        }
     }
     get value() {
         return this.file;

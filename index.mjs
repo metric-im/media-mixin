@@ -50,28 +50,33 @@ export default class MediaMixin extends Componentry.Module {
       try {
         let item = await this.collection.findOne({_id:req.params[0]});
         if (!item) return res.status(404).send();
-        let spec = new Spec(req.params[0],req.query);
+        let spec = new Spec(req.params[0], req.query);
         res.set('Content-Type', 'image/png');
+
         if (item.system === 'aws') {
           try {
-            let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket,'Key':spec.path})
-            let response = await this.connector.profile.S3Client.send(test);
-            response.Body.pipe(res);
-          } catch(e) {
-            Jimp.read(spec.rootPath).then((buffer)=> {
-              return spec.process(buffer);
-            }).then(async (image)=>{
-              await this.connector.profile.S3Client.send(new PutObjectCommand({
+            const imageBuffer = await this.downloadFile("aws", spec.path)
+            res.send(imageBuffer)
+          } catch(error) {
+            if(spec.path === spec.rootPath) {
+              return res.status(404).send();
+            }
+
+            try {
+              const imageBuffer = await this.downloadFile("aws", spec.rootPath)
+              const processedImage = await Jimp.read(imageBuffer)
+              .then(buffer => spec.process(buffer))
+
+              const uploadResult = await this.connector.profile.S3Client.send(new PutObjectCommand({
                 Bucket:this.connector.profile.aws.s3_bucket,
-                Key:spec.path,
-                ContentType: 'image/png',
-                Body: image
-              }));
-              let data = Buffer.from(image, 'base64');
-              res.send(data);
-            }).catch((error)=>{
-              res.status(404).send();
-            })
+                Key: spec.path,
+                ContentType: "image/png",
+                Body: processedImage
+              }))
+              res.send(processedImage)
+            } catch(error) {
+              return res.status(404).send()
+            }
           }
         } else if (item.system === 'storj') {
           res.status(400).send("not implemented")
@@ -82,6 +87,8 @@ export default class MediaMixin extends Componentry.Module {
       }
     })
     router.put("/media/stage/:system",async (req,res) => {
+      if (!req.account) return res.status(401).send();
+
       try {
         if (!req.body._id) req.body._id = this.connector.idForge.datedId();
         let ext = req.body.type.split('/')[1]
@@ -100,6 +107,7 @@ export default class MediaMixin extends Componentry.Module {
         }
         if (req.body.captured) modifier.$set.captured = req.body.captured;
         if (req.account) modifier.$setOnInsert._createdBy = req.account._id;
+
         let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
         res.json({_id:req.body._id,status:'staged'});
       } catch (e) {
@@ -109,49 +117,80 @@ export default class MediaMixin extends Componentry.Module {
     })
 
     router.put('/media/upload/*',async (req,res)=>{
+      if (!req.account) return res.status(401).send();
+      
       try {
         let mediaItem = await this.collection.findOne({_id:req.params[0]},);
         if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
+
         let buffer = req.files.file.data;
-        mediaItem.type = req.files.file.mimetype; // staged type is ignored. It is there for troubleshooting
         let file = `${mediaItem._id}.${mediaItem.type.split('/')[1]}`;
+        let fileType = req.files.file.mimetype; // staged type is ignored. It is there for troubleshooting
+
         // Normalize images into PNG and capture initial crop spec
-        if (['image/jpeg','image/jpg','image/png','image/bmp','image/gif'].includes(mediaItem.type)) {
-          buffer = await Jimp.read(buffer).then(async (image)=>{
-            let spec = new Spec(mediaItem._id,req.query);
-            image = await spec.process(image);
-            mediaItem.type = 'image/png';
-            file = `${mediaItem._id}.png`;
-            return image;
+        if (fileType.startsWith("image/")) {
+          fileType = 'image/png';
+          file = `${mediaItem._id}.png`;
+
+          buffer = await Jimp.read(buffer)
+          .then((image) => {
+            let spec = new Spec(mediaItem._id, req.query);
+            return spec.process(image);
           })
         }
         if (mediaItem.system === 'aws') {
+          // Remove prev variants
           let variants = await this.connector.profile.S3Client.send(new ListObjectsCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Prefix:`media/${mediaItem._id}`,
           }))
+
           await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Delete:{Objects:variants.Contents}
           }));
+          
+          // Upload
           let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
-            Key:`media/${file}`,
-            ContentType: mediaItem.type,
+            Key:`media/${file}`, // for image === spec.path
+            ContentType: fileType,
             Body: buffer
           }))
+
           let url = `https://${this.connector.profile.aws.s3_bucket}.s3.${this.connector.profile.aws.s3_region}.amazonaws.com/media/${file}`;
-          await this.collection.findOneAndUpdate({_id:mediaItem._id},{$set:{status:'live',url:url,type:mediaItem.type,file:file}});
-          res.status(200).json({_id:req.params.id,url:url,status:'success'});
+          await this.collection.findOneAndUpdate(
+            {_id:mediaItem._id},
+            {$set: {status: 'live', url: url, type: fileType, file: file}}
+          );
+
+          res.status(200).json({_id:req.params.id, url:url, status:'success'});
         } else if (mediaItem.system === 'storj') {
           res.status(400).send('not implemented');
         }
       } catch (e) {
-        console.error(e);
+        console.error('/media/upload/* error:', e);
         res.status(500).send();
       }
     })
     return router;
+  }
+  async downloadFile(system, key) {
+    if(system === "aws") {
+      let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket, 'Key': key})
+      let response = await this.connector.profile.S3Client.send(test);
+  
+      const buffer = await new Promise((resolve, reject) => {
+        let data = [];
+        
+        response.Body.on('data', (chunk) => data.push(chunk));
+        response.Body.on('error', (err) => reject(err));
+        response.Body.on('close', () => reject(new Error("Connection closed")));
+        response.Body.on('end', () => resolve(Buffer.concat(data)));
+      });
+
+      return buffer
+    }
   }
 }
 class Spec {
