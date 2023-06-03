@@ -66,12 +66,13 @@ export default class MediaMixin extends Componentry.Module {
                 Bucket:this.connector.profile.aws.s3_bucket,
                 Key: spec.path,
                 ContentType: "image/png",
-                Body: processedImage
+                Body: image
               }))
-              res.send(processedImage)
-            } catch(error) {
+              let data = Buffer.from(image, 'base64');
+              res.send(data);
+            }).catch((error) => {
               return res.status(404).send()
-            }
+            })
           }
         } else if (item.system === 'storj') {
           res.status(400).send("not implemented")
@@ -113,7 +114,7 @@ export default class MediaMixin extends Componentry.Module {
 
     router.put('/media/upload/*',async (req,res)=>{
       if (!req.account) return res.status(401).send();
-      
+
       try {
         let mediaItem = await this.collection.findOne({_id:req.params[0]},);
         if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
@@ -175,10 +176,10 @@ export default class MediaMixin extends Componentry.Module {
     if(system === "aws") {
       let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket, 'Key': key})
       let response = await this.connector.profile.S3Client.send(test);
-  
+
       const buffer = await new Promise((resolve, reject) => {
         let data = [];
-        
+
         response.Body.on('data', (chunk) => data.push(chunk));
         response.Body.on('error', (err) => reject(err));
         response.Body.on('close', () => reject(new Error("Connection closed")));
