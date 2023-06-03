@@ -144,12 +144,14 @@ export default class InputImage extends Component {
     return this.inputFile.value;
   }
   static jobs = [];
-  // async save() {
-  //   let job = new Job(this);
-  //   job.draw(this.progressDisplay);
-  //   await job.stage();
-  //   InputImage.jobs.push(job);
-  // }
+  async save() {
+    if (this.inputFile.value) {
+      let job = new Job(this);
+      job.draw(this.progressDisplay);
+      await job.stage();
+      InputImage.jobs.push(job);
+    }
+  }
 }
 
 class Job {

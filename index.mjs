@@ -55,19 +55,14 @@ export default class MediaMixin extends Componentry.Module {
 
         if (item.system === 'aws') {
           try {
-            const imageBuffer = await this.downloadFile("aws", spec.path)
-            res.send(imageBuffer)
-          } catch(error) {
-            if(spec.path === spec.rootPath) {
-              return res.status(404).send();
-            }
-
-            try {
-              const imageBuffer = await this.downloadFile("aws", spec.rootPath)
-              const processedImage = await Jimp.read(imageBuffer)
-              .then(buffer => spec.process(buffer))
-
-              const uploadResult = await this.connector.profile.S3Client.send(new PutObjectCommand({
+            let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket,'Key':spec.path})
+            let response = await this.connector.profile.S3Client.send(test);
+            response.Body.pipe(res);
+          } catch(e) {
+            await Jimp.read(item.url).then((buffer)=> {
+              return spec.process(buffer);
+            }).then(async (image)=>{
+              await this.connector.profile.S3Client.send(new PutObjectCommand({
                 Bucket:this.connector.profile.aws.s3_bucket,
                 Key: spec.path,
                 ContentType: "image/png",
@@ -139,18 +134,19 @@ export default class MediaMixin extends Componentry.Module {
           })
         }
         if (mediaItem.system === 'aws') {
-          // Remove prev variants
+
+          // When the source image changes, delete prior variants, so they are reconstructed.
           let variants = await this.connector.profile.S3Client.send(new ListObjectsCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Prefix:`media/${mediaItem._id}`,
-          }))
-
-          await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
-            Bucket:this.connector.profile.aws.s3_bucket,
-            Delete:{Objects:variants.Contents}
           }));
-          
-          // Upload
+          if (variants.Contents && variants.Contents.length > 0) {
+            await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
+              Bucket:this.connector.profile.aws.s3_bucket,
+              Delete:{Objects:variants.Contents}
+            }));
+          }
+          // Post the new object
           let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
             Bucket:this.connector.profile.aws.s3_bucket,
             Key:`media/${file}`, // for image === spec.path
