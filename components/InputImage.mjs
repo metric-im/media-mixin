@@ -30,7 +30,7 @@ export default class InputImage extends Component {
 
     this.server = this.props.server || 'aws'; // default to S3, the other option is 'storj'
     this.imageRender = void 0
-    
+
     this._fetchStarted = false
   }
   async render(element) {
@@ -44,7 +44,7 @@ export default class InputImage extends Component {
 
     this.imageBox = this.div('input-image');
     this.formBody = this.div('form-body',this.imageBox);
-    // this.progressDisplay = this.div('progress-display',this.formBody);
+    this.progressDisplay = this.div('progress-display',this.formBody);
     this.inputFile = await this.draw(InputFile,{data:this.props.data,name:"icon",title:this.props.title,accept:"image/*"},this.formBody);
     this.inputFile.setFileListener(this.fileHandler)
     this.inputFile.setTextListener(this.textHandler)
@@ -61,7 +61,7 @@ export default class InputImage extends Component {
       if(url.startsWith("http")) {
         url = url.replace(/^(http:\/\/|https:\/\/)/, "");
       }
-      
+
       const result = await fetch("/media/image/url/"+url, {
         method: 'GET',
       })
@@ -74,7 +74,7 @@ export default class InputImage extends Component {
     } catch(error) {
       console.error("Text handler error:", error)
       window.toast.error("Something went wrong")
-      
+
       this.inputFile.disabled = false
       this.drawImageRender()
     }
@@ -168,7 +168,6 @@ class Job {
   draw(hostElement) {
     this.element = document.createElement("div");
     this.element.classList.add('job');
-    this.element.innerHTML = this.parent.inputFile.value.name;
     this.progressBar = document.createElement("div")
     this.progressBar.classList.add('progress');
     this.element.append(this.progressBar);
