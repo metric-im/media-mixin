@@ -7,7 +7,8 @@
 import express from 'express';
 import fileUpload from 'express-fileupload';
 import Componentry from "@metric-im/componentry";
-import Jimp from 'jimp';
+import axios from 'axios'
+import sharp from 'sharp';
 import {
   PutObjectCommand,
   GetObjectCommand,
@@ -37,9 +38,10 @@ export default class MediaMixin extends Componentry.Module {
       try {
         res.set('Content-Type', 'image/png');
         let key = crypto.createHash('md5').update(req.params[0]).digest('hex');
-        let buffer = await Jimp.read('https://'+req.params[0]);
+        let buffer = await axios('https://'+req.params[0],{responseType:'arraybuffer'});
         let spec = new Spec(key,req.query);
-        let image = await spec.process(buffer);
+        let image = await sharp(buffer.data);
+        image = await spec.process(image);
         res.send(image);
       } catch (e) {
         console.error(e);
@@ -59,9 +61,10 @@ export default class MediaMixin extends Componentry.Module {
             let response = await this.connector.profile.S3Client.send(test);
             response.Body.pipe(res);
           } catch(e) {
-            await Jimp.read(item.url).then((buffer)=> {
-              return spec.process(buffer);
-            }).then(async (image)=>{
+            let buffer = await axios(item.url,{responseType:'arraybuffer'});
+            let image = await sharp(buffer.data);
+            image = await spec.process(image);
+            if (image) {
               await this.connector.profile.S3Client.send(new PutObjectCommand({
                 Bucket:this.connector.profile.aws.s3_bucket,
                 Key: spec.path,
@@ -70,9 +73,9 @@ export default class MediaMixin extends Componentry.Module {
               }))
               let data = Buffer.from(image, 'base64');
               res.send(data);
-            }).catch((error) => {
+            } else {
               return res.status(404).send()
-            })
+            }
           }
         } else if (item.system === 'storj') {
           res.status(400).send("not implemented")
@@ -128,11 +131,9 @@ export default class MediaMixin extends Componentry.Module {
           fileType = 'image/png';
           file = `${mediaItem._id}.png`;
 
-          buffer = await Jimp.read(buffer)
-          .then((image) => {
-            let spec = new Spec(mediaItem._id, req.query);
-            return spec.process(image);
-          })
+          let spec = new Spec(mediaItem._id, req.query);
+          buffer = await sharp(buffer,{failOnError: false});
+          buffer = await spec.process(buffer);
         }
         if (mediaItem.system === 'aws') {
 
@@ -196,25 +197,27 @@ class Spec {
     this.key = key;
     if (query.crop) {
       let data = query.crop.split(',');
-      this.crop = {x:parseInt(data[0]),y:parseInt(data[1]),w:parseInt(data[2]),h:parseInt(data[3])};
+      this.crop = {};
+      if (parseInt(data[0])) this.crop.left = parseInt(data[0]);
+      if (parseInt(data[1])) this.crop.top = parseInt(data[1]);
+      if (parseInt(data[2])) this.crop.width = parseInt(data[2]);
+      if (parseInt(data[3])) this.crop.height = parseInt(data[3]);
       this.isEmpty = false;
     }
     if (query.scale) {
       let data = query.scale.split(',');
-      this.scale = {w:parseInt(data[0]),h:parseInt(data[1])};
+      this.scale = {};
+      if (parseInt(data[0])) this.scale.width = parseInt(data[0]);
+      if (parseInt(data[1])) this.scale.height = parseInt(data[1]);
+      if (parseInt(data[2])) this.scale.fit = parseInt(data[2]);
+      else this.scale.fit = 'cover';
       this.isEmpty = false;
-    }
-    if (['contain','cover','resize','scaleToFit'].includes(query.mode)) {
-      this.mode = query.mode;
-    } else {
-      this.mode = 'cover';
     }
   }
   toString() {
     let str = [];
-    if (this.scale) str.push(`scale=${this.scale.w},${this.scale.h}`);
-    if (this.crop) str.push(`crop=${this.crop.x},${this.crop.y},${this.crop.w},${this.crop.h}`);
-    if (this.mode) str.push(`mode=${this.mode}`);
+    if (this.scale) str.push(`scale=${this.scale.width||0},${this.scale.height||0},${this.scale.fit}`);
+    if (this.crop) str.push(`crop=${this.crop.x||''},${this.crop.y||''},${this.crop.width||''},${this.crop.height||''}`);
     return str.join('&');
   }
   get path() {
@@ -224,25 +227,24 @@ class Spec {
     return 'media/'+this.key+'.png';
   }
   async process(image) {
-    return new Promise((resolve, reject) => {
-      try {
-        if (this.scale) {
-          image[this.mode](this.scale.w,this.scale.h);
-        }
-        if (this.crop) {
-          let x = image.bitmap.width * (this.crop.x/100);
-          let y = image.bitmap.height * (this.crop.y/100);
-          let w = image.bitmap.width * (this.crop.w/100);
-          let h = image.bitmap.height * (this.crop.h/100);
-          image.crop(x,y,w,h);
-        }
-        return image.getBuffer(Jimp.MIME_PNG, function (err, img) {
-          if (err) reject(err);
-          else resolve(img)
-        });
-      } catch (e) {
-        reject(new Error("image processing error: " + e))
+    try {
+      if (this.scale) {
+        image = await image.resize(this.scale);
       }
-    })
+      if (this.crop) {
+        let metadata = await image.metadata();
+        let width = (this.scale.width || metadata.width);
+        let height = (this.scale.height || metadata.height);
+        let options = {};
+        if (this.crop.left) options.left = width * (this.crop.left/100);
+        if (this.crop.top) options.top = height * (this.crop.top/100);
+        if (this.crop.width) options.width = width * (this.crop.width/100);
+        if (this.crop.height) options.height = height * (this.crop.height/100);
+        image = await image.extract(options);
+      }
+      return image.toBuffer();
+    } catch (e) {
+      throw new Error('image processing error: ' + e.message || e);
+    }
   }
 }
