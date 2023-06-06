@@ -29,11 +29,12 @@ root name, but when the same file is requested with the same options, a copy is 
 
 These options can be used together. Scale takes precedence for performance.
 
-| name | value                                                                         |
-| --- |-------------------------------------------------------------------------------|
-| scale | Absolute pixel width provided as width,height. `&scale=900,600`               |
-| crop | Relative cropping, in percents: left, top, width, height. `&crop=20,20,60,60` |
-| mode | Scaling can be treated in numerous ways. We support contain, cover, resize and scaleToFit. The default is "cover" See the Jimp docs: https://www.npmjs.com/package/jimp |
+| name | value                                                                                                                                                                    |
+| --- |--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| scale | Absolute pixel width provided as width,height & fit (optional, cover is default). `&scale=900,600`                                                                       |
+| crop | Relative cropping, in percents: left, top, width, height. `&crop=20,20,60,60`                                                                                            |
+
+See https://sharp.pixelplumbing.com/. This is the image library in use. "scale" is sharp.resize. "crop" is sharp.extract, after percentages are translared to absolute pixels.
 
 ### PUT /media/stage/:system
 
