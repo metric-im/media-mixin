@@ -61,6 +61,7 @@ export default class InputImage extends Component {
       if(url.startsWith("http")) {
         url = url.replace(/^(http:\/\/|https:\/\/)/, "");
       }
+      url = encodeURIComponent(url)
 
       const result = await fetch("/media/image/url/"+url, {
         method: 'GET',

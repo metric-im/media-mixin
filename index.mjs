@@ -36,12 +36,15 @@ export default class MediaMixin extends Componentry.Module {
     router.use(fileUpload({ limit: 200 * 1024 * 1024 }));
     router.get('/media/image/url/*', async (req, res) => {
       try {
-        res.set('Content-Type', 'image/png');
-        let key = crypto.createHash('md5').update(req.params[0]).digest('hex');
-        let buffer = await axios('https://'+req.params[0],{responseType:'arraybuffer'});
+        const url = decodeURIComponent(req.params[0])
+
+        let key = crypto.createHash('md5').update(url).digest('hex');
+        let buffer = await axios('https://'+url,{responseType:'arraybuffer'});
         let spec = new Spec(key,req.query);
         let image = await sharp(buffer.data);
         image = await spec.process(image);
+
+        res.set('Content-Type', 'image/png');
         res.send(image);
       } catch (e) {
         console.error(e);
