@@ -14,8 +14,8 @@ input[type=file] {
     border:1px solid var(--text-color);
     border-radius:3px;
     cursor:pointer;
-    height:26px;
-    width:26px;
+    height:29px;
+    width:29px;
     background-color:var(--bg-color);
     transition:all 100ms;
 }
