@@ -173,6 +173,12 @@ export default class MediaMixin extends Componentry.Module {
         console.error('/media/upload/* error:', e);
         res.status(500).send();
       }
+    });
+    router.get('/media/noimage',(req,res)=>{
+      let pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
+      res.set("Content-Type","image/gif");
+      res.contentLength = 43;
+      res.end(pixel,'binary');
     })
     return router;
   }

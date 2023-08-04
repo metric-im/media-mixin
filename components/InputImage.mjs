@@ -132,6 +132,7 @@ export default class InputImage extends Component {
     if(!result.ok) throw new Error(result.status)
   }
   async updateImage() {
+    if (!this.id) return;
     let url = `/media/image/id/${this.id}`;
     let test = await fetch(url);
 
