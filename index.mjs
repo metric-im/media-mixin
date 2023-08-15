@@ -87,7 +87,35 @@ export default class MediaMixin extends Componentry.Module {
         console.error(e);
         res.status(500).send();
       }
-    })
+    });
+    router.get('/media/image/import/:id/*', async (req, res) => {
+      try {
+        const url = decodeURIComponent(req.params[0])
+
+        let key = crypto.createHash('md5').update(url).digest('hex');
+        let buffer = await axios('https://'+url,{responseType:'arraybuffer'});
+        let spec = new Spec(key,req.query);
+        let image = await sharp(buffer.data);
+        image = await spec.process(image);
+        if (image) {
+          await this.connector.profile.S3Client.send(new PutObjectCommand({
+            Bucket:this.connector.profile.aws.s3_bucket,
+            Key: spec.path,
+            ContentType: "image/png",
+            Body: image
+          }))
+          let data = Buffer.from(image, 'base64');
+          res.send(data);
+        } else {
+          return res.status(404).send()
+        }
+        res.set('Content-Type', 'image/png');
+        res.send(image);
+      } catch (e) {
+        console.error(e);
+        res.status(500).send();
+      }
+    });
     router.put("/media/stage/:system",async (req,res) => {
       if (!req.account) return res.status(401).send();
 
