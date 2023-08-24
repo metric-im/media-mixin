@@ -27,6 +27,7 @@ export default class MediaMixin extends Componentry.Module {
       "statusCode": 302,
       "isBase64Encoded": false
     };
+    this.pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
   }
   setCollection(name) {
     this.collection = this.connector.db.collection(name);
@@ -54,7 +55,7 @@ export default class MediaMixin extends Componentry.Module {
     router.get('/media/image/id/*',async (req,res)=> {
       try {
         let item = await this.collection.findOne({_id:req.params[0]});
-        if (!item) return res.status(404).send();
+        if (!item) return this.notFound(req,res);
         let spec = new Spec(req.params[0], req.query);
         res.set('Content-Type', 'image/png');
 
@@ -77,7 +78,7 @@ export default class MediaMixin extends Componentry.Module {
               let data = Buffer.from(image, 'base64');
               res.send(data);
             } else {
-              return res.status(404).send()
+              return this.notFound(req,res);
             }
           }
         } else if (item.system === 'storj') {
@@ -203,12 +204,20 @@ export default class MediaMixin extends Componentry.Module {
       }
     });
     router.get('/media/noimage',(req,res)=>{
-      let pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
       res.set("Content-Type","image/gif");
       res.contentLength = 43;
-      res.end(pixel,'binary');
+      res.end(this.pixel,'binary');
     })
     return router;
+  }
+  notFound(req,res) {
+    if (req.query.safe) {
+      res.set("Content-Type","image/gif");
+      res.contentLength = 43;
+      res.end(this.pixel,'binary');
+    } else {
+      res.status(404).send();
+    }
   }
   async downloadFile(system, key) {
     if(system === "aws") {

@@ -4,9 +4,32 @@ import InputFile from "./InputFile.mjs";
 const stageImage = async (server, id, image) => {
   let body = {
     _id:`${id}`,
+    origin:"upload",
     type: image.type,
     size: image.size,
     captured: image.lastModified
+  }
+  let options = {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  };
+  let response = await fetch(`/media/stage/${server}`, options);
+  let result = await response.json();
+
+  if(response.ok) {
+    return result
+  } else {
+    window.toast.error("something went wrong: " + result.message);
+  }
+}
+
+const stageUrl = async (server, id, url) => {
+  let body = {
+    _id:`${id}`,
+    origin:"url",
+    url:url
   }
   let options = {
     method: 'PUT',
