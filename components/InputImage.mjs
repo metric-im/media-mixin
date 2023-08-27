@@ -68,7 +68,13 @@ export default class InputImage extends Component {
     this.imageBox = this.div('input-image');
     this.formBody = this.div('form-body',this.imageBox);
     this.progressDisplay = this.div('progress-display',this.formBody);
-    this.inputFile = await this.draw(InputFile,{data:this.props.data,name:"icon",title:this.props.title,accept:"image/*"},this.formBody);
+    this.inputFile = await this.draw(InputFile,{
+      data:this.props.data,
+      name:"icon",
+      title:this.props.title,
+      accept:"image/*",
+      hideTitle: this.props.hideTitle
+    },this.formBody);
     this.inputFile.setFileListener(this.fileHandler)
     this.inputFile.setTextListener(this.textHandler)
 

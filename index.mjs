@@ -35,6 +35,29 @@ export default class MediaMixin extends Componentry.Module {
   routes() {
     let router = express.Router();
     router.use(fileUpload({ limit: 200 * 1024 * 1024 }));
+    /**
+     * List gets the unique ids of all items that match the path.
+     */
+    router.get('/media/image/list/*',async (req,res)=>{
+      try {
+        let prefix = `media/${req.params[0]}`;
+        let test = new ListObjectsCommand({
+          Bucket:this.connector.profile.aws.s3_bucket,
+          Prefix:prefix
+        })
+        let response = await this.connector.profile.S3Client.send(test);
+        let ids = new Set();
+        for (let record of response.Contents||[]) {
+          let id = record.Key.slice(record.Key.lastIndexOf('/')+1,record.Key.indexOf('.'));
+          ids.add(id);
+        }
+        res.json(Array.from(ids));
+      } catch(e) {
+        console.log(e.message);
+        res.send(e.message)
+      }
+
+    })
     router.get('/media/image/url/*', async (req, res) => {
       try {
         const url = decodeURIComponent(req.params[0])
