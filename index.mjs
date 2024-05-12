@@ -9,28 +9,43 @@ import fileUpload from 'express-fileupload';
 import Componentry from "@metric-im/componentry";
 import axios from 'axios'
 import sharp from 'sharp';
-import {
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectsCommand,
-  ListObjectsCommand} from '@aws-sdk/client-s3';
 import crypto from "crypto";
+import {Binary} from "mongodb";
 
 export default class MediaMixin extends Componentry.Module {
   constructor(connector) {
     super(connector,import.meta.url)
+    this.system = (process.env.MEDIA_STORAGE || 'aws').toLowerCase();
+    this.maxImageWidth = parseInt(process.env.IMAGE_MAXWIDTH || "2048");
     this.collection = this.connector.db.collection('media');
-    const errorResponse = {
-      "headers": {
-        "Location": `https://${this.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
-      },
-      "statusCode": 302,
-      "isBase64Encoded": false
-    };
     this.pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
   }
+
+  /**
+   * Set collection is used to rename the default media collection
+   * @param name alternate name to 'media'
+   */
   setCollection(name) {
     this.collection = this.connector.db.collection(name);
+  }
+  async mint(connector) {
+    let instance = new MediaMixin(connector);
+    if (this.system === 'aws') {
+      this.aws = {};
+      for (let mod of ['PutObjectCommand','GetObjectCommand','DeleteObjectsCommand','ListObjectsCommand]']) {
+        this.aws[mod] = await import(`@aws-sdk/client-s3/${mod}`);
+      }
+      const errorResponse = {
+        "headers": {
+          "Location": `https://${this.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
+        },
+        "statusCode": 302,
+        "isBase64Encoded": false
+      };
+    } else if (this.system === 'database') {
+    } else if (this.system === 'storj') {
+    }
+    return instance;
   }
   routes() {
     let router = express.Router();
@@ -40,23 +55,34 @@ export default class MediaMixin extends Componentry.Module {
      */
     router.get('/media/image/list/*',async (req,res)=>{
       try {
-        let prefix = `media/${req.params[0]}`;
-        let test = new ListObjectsCommand({
-          Bucket:this.connector.profile.aws.s3_bucket,
-          Prefix:prefix
-        })
-        let response = await this.connector.profile.S3Client.send(test);
-        let ids = new Set();
-        for (let record of response.Contents||[]) {
-          let id = record.Key.slice(record.Key.lastIndexOf('/')+1,record.Key.indexOf('.'));
-          ids.add(id);
+        if (this.system === 'aws') {
+          let prefix = `media/${req.params[0]}`;
+          let test = new this.aws.ListObjectsCommand({
+            Bucket:this.connector.profile.aws.s3_bucket,
+            Prefix:prefix
+          })
+          let response = await this.connector.profile.S3Client.send(test);
+          let ids = new Set();
+          for (let record of response.Contents||[]) {
+            let id = record.Key.slice(record.Key.lastIndexOf('/')+1,record.Key.indexOf('.'));
+            ids.add(id);
+          }
+          res.json(Array.from(ids));
+        } else if (this.system === 'database') {
+          let params = req.params[0].split('/');
+          let query = {};
+          if (params[1]) query.classification = params[1];
+          if (params[0]) query.account = params[0];
+          let list = await this.collection.find(query).toArray();
+          res.json(list);
+        } else if (this.system === 'storj') {
+          // not yet implemented
+          res.json([])
         }
-        res.json(Array.from(ids));
       } catch(e) {
         console.log(e.message);
         res.send(e.message)
       }
-
     })
     router.get('/media/image/url/*', async (req, res) => {
       try {
@@ -82,18 +108,18 @@ export default class MediaMixin extends Componentry.Module {
         let spec = new Spec(req.params[0], req.query);
         res.set('Content-Type', 'image/png');
 
-        if (item.system === 'aws') {
+        if (this.system === 'aws') {
           try {
-            let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket,'Key':spec.path})
+            let test = new this.aws.GetObjectCommand({Bucket: this.connector.profile.aws.s3_bucket, 'Key': spec.path})
             let response = await this.connector.profile.S3Client.send(test);
             response.Body.pipe(res);
-          } catch(e) {
-            let buffer = await axios(item.url,{responseType:'arraybuffer'});
+          } catch (e) {
+            let buffer = await axios(item.url, {responseType: 'arraybuffer'});
             let image = await sharp(buffer.data);
             image = await spec.process(image);
             if (image) {
-              await this.connector.profile.S3Client.send(new PutObjectCommand({
-                Bucket:this.connector.profile.aws.s3_bucket,
+              await this.connector.profile.S3Client.send(new this.aws.PutObjectCommand({
+                Bucket: this.connector.profile.aws.s3_bucket,
                 Key: spec.path,
                 ContentType: "image/png",
                 Body: image
@@ -101,10 +127,14 @@ export default class MediaMixin extends Componentry.Module {
               let data = Buffer.from(image, 'base64');
               res.send(data);
             } else {
-              return this.notFound(req,res);
+              return this.notFound(req, res);
             }
           }
-        } else if (item.system === 'storj') {
+        } else if (this.system === 'database') {
+          let image = await sharp(Buffer.from(item.data,'base64'));
+          image = await spec.process(image);
+          res.send(image);
+        } else if (this.system === 'storj') {
           res.status(400).send("not implemented")
         } else res.json(item);
       } catch (e) {
@@ -112,6 +142,7 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
+    //TODO: this needs work
     router.get('/media/image/import/:id/*', async (req, res) => {
       try {
         const url = decodeURIComponent(req.params[0])
@@ -122,14 +153,22 @@ export default class MediaMixin extends Componentry.Module {
         let image = await sharp(buffer.data);
         image = await spec.process(image);
         if (image) {
-          await this.connector.profile.S3Client.send(new PutObjectCommand({
-            Bucket:this.connector.profile.aws.s3_bucket,
-            Key: spec.path,
-            ContentType: "image/png",
-            Body: image
-          }))
-          let data = Buffer.from(image, 'base64');
-          res.send(data);
+          if (this.system === 'aws') {
+            await this.connector.profile.S3Client.send(new this.aws.PutObjectCommand({
+              Bucket:this.connector.profile.aws.s3_bucket,
+              Key: spec.path,
+              ContentType: "image/png",
+              Body: image
+            }))
+            let data = Buffer.from(image, 'base64');
+            res.send(data);
+          } else if (this.system === 'database') {
+            // need to insert first.
+            let data = Buffer.from(image, 'base64');
+            res.send(data);
+          } else {
+            return res.status(404).send()
+          }
         } else {
           return res.status(404).send()
         }
@@ -140,7 +179,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.put("/media/stage/:system",async (req,res) => {
+    // the designation of system here is deprecated. this.system determines the processing
+    router.put("/media/stage/:system?",async (req,res) => {
       if (!req.account) return res.status(401).send();
 
       try {
@@ -148,10 +188,8 @@ export default class MediaMixin extends Componentry.Module {
         let ext = req.body.type.split('/')[1]
         let modifier = {
           $set:{
-            file:req.body._id + '.' + ext,
             type:req.body.type,
             size:req.body.size,
-            system:req.params.system,
             status:"staged",
             _modified:new Date()
           },
@@ -159,8 +197,10 @@ export default class MediaMixin extends Componentry.Module {
             _created:new Date()
           }
         }
+        if (req.body.account) modifier.$set.account = req.body.account;
+        if (req.body.classification) modifier.$set.classification = req.body.classification;
         if (req.body.captured) modifier.$set.captured = req.body.captured;
-        if (req.account) modifier.$setOnInsert._createdBy = req.account._id;
+        modifier.$setOnInsert._createdBy = req.account.userid;
 
         let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
         res.json({_id:req.body._id,status:'staged'});
@@ -179,7 +219,7 @@ export default class MediaMixin extends Componentry.Module {
 
         let buffer = req.files.file.data;
         let file = `${mediaItem._id}.${mediaItem.type.split('/')[1]}`;
-        let fileType = req.files.file.mimetype; // staged type is ignored. It is there for troubleshooting
+        let fileType = req.files.file.mimetype;
 
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith("image/")) {
@@ -190,35 +230,42 @@ export default class MediaMixin extends Componentry.Module {
           buffer = await sharp(buffer,{failOnError: false});
           buffer = await spec.process(buffer);
         }
-        if (mediaItem.system === 'aws') {
-
+        if (this.system === 'aws') {
           // When the source image changes, delete prior variants, so they are reconstructed.
-          let variants = await this.connector.profile.S3Client.send(new ListObjectsCommand({
-            Bucket:this.connector.profile.aws.s3_bucket,
-            Prefix:`media/${mediaItem._id}`,
+          let variants = await this.connector.profile.S3Client.send(new this.aws.ListObjectsCommand({
+            Bucket: this.connector.profile.aws.s3_bucket,
+            Prefix: `media/${mediaItem._id}`,
           }));
           if (variants.Contents && variants.Contents.length > 0) {
-            await this.connector.profile.S3Client.send(new DeleteObjectsCommand({
-              Bucket:this.connector.profile.aws.s3_bucket,
-              Delete:{Objects:variants.Contents}
+            await this.connector.profile.S3Client.send(new this.aws.DeleteObjectsCommand({
+              Bucket: this.connector.profile.aws.s3_bucket,
+              Delete: {Objects: variants.Contents}
             }));
           }
           // Post the new object
-          let result = await this.connector.profile.S3Client.send(new PutObjectCommand({
-            Bucket:this.connector.profile.aws.s3_bucket,
-            Key:`media/${file}`, // for image === spec.path
+          let result = await this.connector.profile.S3Client.send(new this.aws.PutObjectCommand({
+            Bucket: this.connector.profile.aws.s3_bucket,
+            Key: `media/${file}`, // for image === spec.path
             ContentType: fileType,
             Body: buffer
           }))
 
           let url = `https://${this.connector.profile.aws.s3_bucket}.s3.${this.connector.profile.aws.s3_region}.amazonaws.com/media/${file}`;
           await this.collection.findOneAndUpdate(
-            {_id:mediaItem._id},
-            {$set: {status: 'live', url: url, type: fileType, file: file}}
+              {_id: mediaItem._id},
+              {$set: {status: 'live', url: url, type: fileType, file: file}}
           );
 
-          res.status(200).json({_id:req.params.id, url:url, status:'success'});
-        } else if (mediaItem.system === 'storj') {
+          res.status(200).json({_id: req.params.id, url: url, status: 'success'});
+        } else if (this.system === 'database') {
+          let url = this.connector.profile.baseUrl;
+          let data = buffer.toString('base64');
+          await this.collection.findOneAndUpdate(
+              {_id: mediaItem._id},
+              {$set: {status: 'live', url: url, type: fileType, file: file, data: data,variants:[]}}
+          );
+          res.status(200).json({_id: req.params.id, url: url, status: 'success'});
+        } else if (this.system === 'storj') {
           res.status(400).send('not implemented');
         }
       } catch (e) {
@@ -240,23 +287,6 @@ export default class MediaMixin extends Componentry.Module {
       res.end(this.pixel,'binary');
     } else {
       res.status(404).send();
-    }
-  }
-  async downloadFile(system, key) {
-    if(system === "aws") {
-      let test = new GetObjectCommand({Bucket:this.connector.profile.aws.s3_bucket, 'Key': key})
-      let response = await this.connector.profile.S3Client.send(test);
-
-      const buffer = await new Promise((resolve, reject) => {
-        let data = [];
-
-        response.Body.on('data', (chunk) => data.push(chunk));
-        response.Body.on('error', (err) => reject(err));
-        response.Body.on('close', () => reject(new Error("Connection closed")));
-        response.Body.on('end', () => resolve(Buffer.concat(data)));
-      });
-
-      return buffer
     }
   }
 }

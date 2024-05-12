@@ -1,7 +1,7 @@
 import Component from "./Component.mjs";
 import InputFile from "./InputFile.mjs";
 
-const stageImage = async (server, id, image) => {
+const stageImage = async (id, image) => {
   let body = {
     _id:`${id}`,
     origin:"upload",
@@ -15,7 +15,7 @@ const stageImage = async (server, id, image) => {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body)
   };
-  let response = await fetch(`/media/stage/${server}`, options);
+  let response = await fetch(`/media/stage/`, options);
   let result = await response.json();
 
   if(response.ok) {
@@ -37,7 +37,7 @@ const stageUrl = async (server, id, url) => {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body)
   };
-  let response = await fetch(`/media/stage/${server}`, options);
+  let response = await fetch(`/media/stage`, options);
   let result = await response.json();
 
   if(response.ok) {
@@ -51,7 +51,6 @@ export default class InputImage extends Component {
   constructor(props) {
     super(props);
 
-    this.server = this.props.server || 'aws'; // default to S3, the other option is 'storj'
     this.imageRender = void 0
 
     this._fetchStarted = false
@@ -151,7 +150,7 @@ export default class InputImage extends Component {
     const formData = new FormData();
     formData.append('file', image);
 
-    const stageResult = await stageImage(this.server, this.id, image)
+    const stageResult = await stageImage(this.id, image)
 
     const options = this.props.options?`?${this.props.options}`:'';
     const result = await fetch("/media/upload/"+stageResult._id+options, {
@@ -229,7 +228,7 @@ class Job {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body)
     };
-    let response = await fetch(`/media/stage/${this.parent.server}`, options);
+    let response = await fetch(`/media/stage/`, options);
     let result = await response.json();
     if (response.ok) {
       this.status = Job.UPLOAD;
