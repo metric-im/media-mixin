@@ -49,7 +49,7 @@ export default class MediaMixin extends Componentry.Module {
   }
   routes() {
     let router = express.Router();
-    router.use(fileUpload({ limit: 200 * 1024 * 1024 }));
+    router.use(fileUpload({ limits: {fileSize: 50 * 1024 * 1024}}));
     /**
      * List gets the unique ids of all items that match the path.
      */
