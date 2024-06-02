@@ -45,15 +45,44 @@
     position:relative;
 }
 .properties-image-container img {
-    position:absolute;
-    top:0;
-    left:0;
+    /*position:absolute;*/
+    /*top:0;*/
+    /*left:0;*/
     width:100%;
 }
 .properties-details-container {
+    display:flex;
+    flex-direction: column;
     flex:0;
-    margin-left:var(--spacer);
+    margin-left:var(--spacerhalf);
 }
-.properties-details-container h2 {
+.properties-details-container #image-id {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity:0.8;
+    font-size:0.8em;
     margin-top:0;
+    margin-bottom:var(--spacerhalf);
+}
+.properties-details-container #image-description {
+    resize:none;
+}
+.InputInlineTable {
+    font-size:0.8em;
+}
+.InputInlineTable .Button {
+    font-size:0.8em;
+    margin:0;
+    padding:0;
+}
+.InputInlineTable .Button BUTTON {
+    height:26px;
+}
+@media only screen and (max-width: 600px) {
+    .item-properties {
+        flex-direction: column;
+    }
+    .properties-details-container {
+        margin-left:0 !important;
+    }
 }
