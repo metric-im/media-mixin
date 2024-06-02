@@ -147,13 +147,11 @@ class DatabaseStorage extends StorageBridge {
         return image;
     }
     async putImage(id,file,fileType,buffer) {
-        let url = this.parent.connector.profile.baseUrl;
         let data = buffer.toString('base64');
         await this.parent.collection.findOneAndUpdate(
             {_id: id},
-            {$set: {status: 'live', url: url, type: fileType, file: file, data: data,variants:[]}}
+            {$set: {status: 'live', type: fileType, file: file, data: data,variants:[]}}
         );
-        return url;
     }
     async rotate(id) {
         let item = await this.getItem(id);

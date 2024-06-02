@@ -23,6 +23,9 @@ export default class InputMultipleImages extends Component {
     this.saveButton = await this.draw(Button,{name:'save',title:'Save',onClick:this.save.bind(this)},this.controls);
     this.rotateButton = await this.draw(Button,{name:'rotate',title:'Rotate',onClick:async () => {
       let result = await API.get(`/media/image/rotate/${this.selected._id}`);
+      document.querySelectorAll(`img[src*='${this.selected._id}']`).forEach(img=>{
+        img.src = img.src;
+      });
     }},this.controls);
     this.deleteButton = await this.draw(Button,{name:'delete',title:'Delete',onClick:async ()=> {
       if (this.selected && window.confirm('Are you you want to delete this image?')) {
@@ -190,6 +193,25 @@ export default class InputMultipleImages extends Component {
       this.inputFile.drawContent("");
     }
   }
+  async updateItem(id) {
+    let item = await API.get(`/media/props/${id}`);
+    let found = false;
+    let i = 0;
+    for (let entry of this.imageList) {
+      if (entry._id === item._id) {
+        this.imageList.splice(i,1,item);
+        break;
+      } else i++;
+    }
+    if (i >= this.imageList.length) this.imageList.push(item);
+    let root = id.match(/\/(.+)\./)
+    if (root) root = root[1];
+    else return;
+    this.element.querySelectorAll(`IMG[id*='${root}']`).forEach(img=>{
+      img.src = item.url;
+      img.id = item._id;
+    })
+  }
 }
 
 class Job {
@@ -218,20 +240,19 @@ class Job {
       formatting:[{name:'original',layout:''}],
       account:this.parent.props.context.id
     }
-    let options = {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(body)
-    };
-    let response = await fetch(`/media/props/`, options);
-    let result = await response.json();
-    if (response.ok) {
+    // let options = {
+    //   method: 'PUT',
+    //   credentials: 'same-origin',
+    //   headers: {'Content-Type': 'application/json'},
+    //   body: JSON.stringify(body)
+    // };
+    try {
+      let response = await API.put(`/media/props`, body);
       this.status = Job.UPLOAD;
-      await this.upload(result);
-    } else {
+      await this.upload(response);
+    } catch(e) {
       this.status = Job.FAILED;
-      window.toast.error("something went wrong: " + result.message);
+      window.toast.error("something went wrong: " + response.message);
     }
   }
 
@@ -250,9 +271,10 @@ class Job {
       xhr.send(formData);
       xhr.onload = async (e) => {
         this.status = Job.SUCCESS;
-        // await this.parent.updateImage();
+        await this.parent.updateItem(stageResult._id)
       };
     } catch(error) {
+      this.status = Job.FAILED;
       window.toast.error("something went wrong: " + error);
     }
   }

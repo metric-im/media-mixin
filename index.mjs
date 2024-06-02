@@ -131,17 +131,31 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
+    router.get("/media/props/*",async (req,res)=>{
+      try {
+        let item = await this.storage.getItem(req.params[0]);
+        if (item) {
+          delete item.data;
+          return res.json(item);
+        }
+        else return this.notFound(req,res)
+      } catch (e) {
+        res.status(500).send();
+      }
+    })
     router.put("/media/props",async (req,res) => {
       if (!req.account) return res.status(401).send();
 
       try {
-        if (!req.body._id) req.body._id = this.connector.idForge.datedId();
+        if (!req.body._id) {
+          req.body._id = this.connector.idForge.datedId();
+        }
         req.body._modified = new Date();
         let modifier = {
           $set:req.body,
           $setOnInsert:{
             status:"staged",
-            url:this.connector.profile.baseUrl+'/media/image/'+req.body._id,
+            url:this.connector.profile.baseUrl+'/media/image/id/'+req.body._id,
             _created:new Date(),
             _createdBy:req.account.userId
           }
@@ -170,11 +184,13 @@ export default class MediaMixin extends Componentry.Module {
         if (fileType.startsWith("image/")) {
           fileType = 'image/png';
           file = `${mediaItem._id}.png`;
-          let spec = new this.storage.getSpec(mediaItem._id, req.query);
+
+          let spec = await this.storage.getSpec(mediaItem._id, req.query);
           buffer = await sharp(buffer,{failOnError: false});
           buffer = await spec.process(buffer);
         }
         let result = await this.storage.putImage(mediaItem._id,file,fileType,buffer);
+        res.json({});
       } catch (e) {
         console.error('/media/upload/* error:', e);
         res.status(500).send();
