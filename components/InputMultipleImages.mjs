@@ -58,7 +58,8 @@ export default class InputMultipleImages extends Component {
       imageContainer.append(img);
       let detailsContainer = this.div('properties-details-container',this.itemProperties);
       detailsContainer.innerHTML = `<div id="image-id">id: ${this.selected._id}</div>`;
-      await this.draw(InputText,{name:'description',placeholder:'name/description/keywords',data:this.selected},detailsContainer);
+      this.description = await this.draw(InputText,{name:'description',placeholder:'name/description/keywords',data:this.selected},detailsContainer);
+      this.description.element.classList.add('full-width');
       this.formatTable = await this.draw(InputInlineTable,{
         name:'formatting',
         data:this.selected,

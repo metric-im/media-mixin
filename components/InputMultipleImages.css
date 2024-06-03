@@ -9,6 +9,7 @@
     border:1px solid black;
     margin:var(--spacer);
     overflow:hidden;
+    min-height:140px
 }
 .drop-box img {
     cursor:pointer;
@@ -84,5 +85,9 @@
     }
     .properties-details-container {
         margin-left:0 !important;
+    }
+    .InputInlineTable {
+        background-color:green;
+        display:none !important;
     }
 }
