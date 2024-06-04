@@ -31,7 +31,7 @@ These options can be used together. Scale takes precedence for performance.
 
 | name | value                                                                                                                                                               |
 | --- |---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| scale | Absolute pixel width provided as width,height & fit (optional, cover is default). `&scale=900,600`                                                                  |
+| scale | Absolute pixel width provided as width,height & fit (optional, cover is default). `&scale=900,600`. `*` can be used to float width while setting height             |
 | crop | Relative cropping, in percents: left, top, width, height. `&crop=20,20,60,60`                                                                                       |
 | fit | Same as object-fit in css. Values are cover, contain, fill, inside or outside. Cover is the default. The value is ignored if both height and width are not provided |
 See https://sharp.pixelplumbing.com/. This is the image library in use. "scale" is sharp.resize. "crop" is sharp.extract, after percentages are translated to absolute pixels.
