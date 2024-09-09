@@ -17,7 +17,8 @@ export default class StorageBridge {
             database:DatabaseStorage,
             storj:null
         };
-        return await this.handlers[instance.host].mint(parent);
+        const handler = this.handlers[instance.host]
+        return await handler.mint(parent);
     }
     async list(account){
         // see inheritors
@@ -45,16 +46,14 @@ export default class StorageBridge {
 class AWSStorage extends StorageBridge {
     constructor(parent) {
         super(parent);
+        this.connector = parent.connector;
     }
-    async mint(parent) {
-        let instance = await super.mint(parent);
-        this.aws = {};
-        for (let mod of ['PutObjectCommand','GetObjectCommand','DeleteObjectsCommand','ListObjectsCommand]']) {
-            this.aws[mod] = await import(`@aws-sdk/client-s3/${mod}`);
-        }
+    static async mint(parent) {
+        let instance = new AWSStorage(parent);
+        this.aws = await import("@aws-sdk/client-s3");
         const errorResponse = {
             "headers": {
-                "Location": `https://${this.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
+                "Location": `https://${parent.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
             },
             "statusCode": 302,
             "isBase64Encoded": false
@@ -63,11 +62,11 @@ class AWSStorage extends StorageBridge {
     }
     async list(account) {
         let prefix = `media/${account}`;
-        let test = new this.parent.aws.ListObjectsCommand({
-            Bucket:this.parent.connector.profile.aws.s3_bucket,
+        let test = new this.aws.ListObjectsCommand({
+            Bucket:this.connector.profile.aws.s3_bucket,
             Prefix:prefix
         })
-        let response = await this.parent.connector.profile.S3Client.send(test);
+        let response = await this.connector.profile.S3Client.send(test);
         let ids = new Set();
         for (let record of response.Contents||[]) {
             let id = record.Key.slice(record.Key.lastIndexOf('/')+1,record.Key.indexOf('.'));
