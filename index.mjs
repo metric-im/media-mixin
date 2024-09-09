@@ -42,8 +42,8 @@ export default class MediaMixin extends Componentry.Module {
     router.get('/media/image/list/*',async (req,res)=>{
       try {
         let images = await this.storage.list(req.params[0]);
-        let result = images.map(({data,...washed}) => washed); // remove attributes not inteded for the client
-        res.json(result);
+        // let result = images.map(({data,...washed}) => washed); // remove attributes not inteded for the client
+        res.json(images);
       } catch(e) {
         res.send(e.message)
       }
@@ -70,7 +70,8 @@ export default class MediaMixin extends Componentry.Module {
         let image = await this.storage.get(req.params[0],req.query);
         if (image) {
           res.set('Content-Type', 'image/png');
-          res.send(image);
+          image.pipe(res); //TODO: this breaks DatabaseStorage
+//          res.send(image);
         }
         else return this.notFound(req,res)
       } catch (e) {
