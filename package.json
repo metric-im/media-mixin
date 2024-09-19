@@ -1,6 +1,6 @@
 {
   "name": "@metric-im/media-mixin",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Componentry tools for image and video",
   "type": "module",
   "main": "index.mjs",
