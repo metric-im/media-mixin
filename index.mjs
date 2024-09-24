@@ -33,12 +33,27 @@ export default class MediaMixin extends Componentry.Module {
     instance.storage = await StorageBridge.mint(instance); // an instance established by the environment is returned
     return instance;
   }
+
+  prepareItems(items) {
+    const preparedItems = []
+
+    for (const item of items.split(';')) {
+      if (item) {
+        const [key, val] = item.split(':')
+        preparedItems.push({[key]: val})
+      }
+    }
+    return preparedItems
+  }
+
   routes() {
     let router = express.Router();
     router.use(fileUpload({ limits: {fileSize: 50 * 1024 * 1024}}));
+
     /**
      * List gets all items that match the path.
      */
+
     router.get('/media/image/list/*',async (req,res)=>{
       try {
         let images = await this.storage.list(req.params[0]);
@@ -48,6 +63,7 @@ export default class MediaMixin extends Componentry.Module {
         res.send(e.message)
       }
     })
+
     router.get('/media/image/url/*', async (req, res) => {
       try {
         const url = decodeURIComponent(req.params[0])
@@ -65,6 +81,7 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
+
     router.get('/media/image/id/*',async (req,res)=> {
       try {
         let image = await this.storage.get(req.params[0],req.query);
@@ -75,22 +92,43 @@ export default class MediaMixin extends Componentry.Module {
         }
         else return this.notFound(req,res)
       } catch (e) {
+        console.log(e)
         res.status(500).send();
       }
     });
+
     router.get('/media/image/rotate/*',async (req,res)=> {
       try {
-        await this.storage.rotate(req.params[0]);
+        const rotateDegree = +req.query?.rotateDegree
+        if (!rotateDegree) res.status(400).json({message: 'Set the query param rotateDegree!'})
+
+        const items = this.prepareItems(req.query?.include || [])
+
+        await this.storage.rotate(req.params[0], rotateDegree, items);
         res.status(200).json({});
       } catch (e) {
+        console.log(e)
         res.status(500).json({});
       }
     });
-    router.delete('/media/image/*', async(req,res)=>{
+
+    // media-mixin index.js
+    router.delete('/media/image/*', async(req,res) => {
       try {
-        await this.storage.remove(req.params[0]);
-        res.status(200).send();
+        const id = req.params[0]
+        if (!id) res.status(400).json({'message': 'Image id is required'})
+
+        const itemsToDelete = req.query['delete'] || [] // required to delete optimized variants of this image by id
+        const preparedItems = this.prepareItems(itemsToDelete)
+
+        const isDeleted = await this.storage.remove(req.params[0], preparedItems);
+        if (isDeleted) {
+          res.status(200).send();
+        } else {
+          res.status(400).json({'message': 'Image was not found or unexpected error'})
+        }
       } catch(e) {
+        console.log(e)
         res.status(500).send();
       }
     })
@@ -132,7 +170,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.get("/media/props/*",async (req,res)=>{
+
+    router.get("/media/props/*",async (req,res) => {
       try {
         let item = await this.storage.getItem(req.params[0]);
         if (item) {
@@ -144,6 +183,7 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     })
+
     router.put("/media/props",async (req,res) => {
       if (!req.account) return res.status(401).send();
 
@@ -171,7 +211,7 @@ export default class MediaMixin extends Componentry.Module {
       }
     })
 
-    router.put('/media/upload/*',async (req,res)=>{
+    router.put('/media/upload/*',async (req,res) => {
       if (!req.account) return res.status(401).send();
 
       try {
@@ -184,25 +224,59 @@ export default class MediaMixin extends Componentry.Module {
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith("image/")) {
           fileType = 'image/png';
-          file = `${mediaItem._id}.png`;
+
+          if (Object.keys(req.query).length === 0) {
+            let specForThumbnail = await this.storage.getSpec(mediaItem._id, {scale: '60,60,cover'});
+            let bufferThumbnail = await sharp(buffer,{failOnError: false});
+            bufferThumbnail = await specForThumbnail.process(bufferThumbnail);
+            await this.storage.putImage(mediaItem._id, specForThumbnail.path, fileType, bufferThumbnail);
+          }
 
           let spec = await this.storage.getSpec(mediaItem._id, req.query);
           buffer = await sharp(buffer,{failOnError: false});
           buffer = await spec.process(buffer);
+          file = spec.path
         }
-        let result = await this.storage.putImage(mediaItem._id,file,fileType,buffer);
+
+        await this.storage.putImage(mediaItem._id, file, fileType, buffer);
         res.json({});
       } catch (e) {
         console.error('/media/upload/* error:', e);
         res.status(500).send();
       }
     });
+
+    router.put('/media/stage/*',async (req,res) => {
+      try {
+        if (!req.account) return res.status(401).send();
+
+        const server = req.query['query'] || 'aws'
+
+        switch (server) {
+          case StorageBridge.AWS:
+            const response = await this.collection.insertOne({
+              system: StorageBridge.AWS,
+              status: 'staged',
+              ...req.body
+            })
+            return res.status(201).json(req.body)
+          default:
+            return res.status(400).json({message: `The server ${server} is not supported`})
+        }
+      }
+      catch (e) {
+        console.log(e)
+        return res.status(500)
+      }
+    });
+
     router.get('/media/noimage',(req,res)=>{
       res.set("Content-Type","image/gif");
       res.contentLength = 43;
       res.end(this.pixel,'binary');
     })
     return router;
+
   }
   notFound(req,res) {
     if (req.query.safe) {
