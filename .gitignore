@@ -7,3 +7,23 @@ test_modules
 package-lock\.json
 .npmrc
 .env
+.Ds_Store
+
+### Node ###
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+### macOS ###
+# General
+.DS_Store
+.AppleDouble
+.LSOverride
+
+.idea
+.vs_code

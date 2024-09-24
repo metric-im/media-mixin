@@ -1,8 +1,13 @@
+import sharp from "sharp";
+
 export default class MediaManipulation {
     constructor(id,query) {
+
         this.isEmpty = true;
         this.id = id;
-        if (query.crop) {
+        console.log(query)
+
+        if (query?.crop) {
             let data = query.crop.split(',');
             this.crop = {};
             if (parseInt(data[0])) this.crop.left = parseInt(data[0]);
@@ -11,7 +16,8 @@ export default class MediaManipulation {
             if (parseInt(data[3])) this.crop.height = parseInt(data[3]);
             this.isEmpty = false;
         }
-        if (query.scale) {
+
+        if (query?.scale) {
             let data = query.scale.split(',');
             this.scale = {};
             if (parseInt(data[0])) this.scale.width = parseInt(data[0]);
@@ -20,6 +26,7 @@ export default class MediaManipulation {
             else this.scale.fit = 'cover';
             this.isEmpty = false;
         }
+
     }
     toString() {
         let str = [];
@@ -28,7 +35,9 @@ export default class MediaManipulation {
         return str.join('&');
     }
     get path() {
-        return `media/${this.id}${(!this.isEmpty?'.'+this.toString():'')}.png`;
+        const res =  `media/${this.id}${(!this.isEmpty?'.'+this.toString():'')}.png`;
+        console.log('Path', res)
+        return res
     }
     get rootPath() {
         return `media/${this.id}.png`;
@@ -36,7 +45,7 @@ export default class MediaManipulation {
     async process(image) {
         try {
             if (this.scale) {
-                image = await image.resize(this.scale);
+                image.resize(this.scale);
             }
             if (this.crop) {
                 let metadata = await image.metadata();
