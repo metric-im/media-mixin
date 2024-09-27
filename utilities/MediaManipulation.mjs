@@ -5,7 +5,6 @@ export default class MediaManipulation {
 
         this.isEmpty = true;
         this.id = id;
-        console.log(query)
 
         if (query?.crop) {
             let data = query.crop.split(',');

@@ -84,13 +84,14 @@ export default class MediaMixin extends Componentry.Module {
 
     router.get('/media/image/id/*',async (req,res)=> {
       try {
-        let image = await this.storage.get(req.params[0],req.query);
+        let image = await this.storage.get(req.params[0], req.query);
         if (image) {
-          res.set('Content-Type', 'image/png');
-          image.pipe(res); //TODO: this breaks DatabaseStorage
-//          res.send(image);
+          image.pipe(res); // TODO: this breaks DatabaseStorage
+
+          // res.set('Content-Type', 'image/png');
+          // res.send(image);
         }
-        else return this.notFound(req,res)
+        else return this.notFound(req, res)
       } catch (e) {
         console.log(e)
         res.status(500).send();
@@ -102,9 +103,7 @@ export default class MediaMixin extends Componentry.Module {
         const rotateDegree = +req.query?.rotateDegree
         if (!rotateDegree) res.status(400).json({message: 'Set the query param rotateDegree!'})
 
-        const items = this.prepareItems(req.query?.include || [])
-
-        await this.storage.rotate(req.params[0], rotateDegree, items);
+        await this.storage.rotate(req.params[0], rotateDegree);
         res.status(200).json({});
       } catch (e) {
         console.log(e)
@@ -113,15 +112,12 @@ export default class MediaMixin extends Componentry.Module {
     });
 
     // media-mixin index.js
-    router.delete('/media/image/*', async(req,res) => {
+    router.delete('/media/image/*', async (req, res) => {
       try {
         const id = req.params[0]
         if (!id) res.status(400).json({'message': 'Image id is required'})
 
-        const itemsToDelete = req.query['delete'] || [] // required to delete optimized variants of this image by id
-        const preparedItems = this.prepareItems(itemsToDelete)
-
-        const isDeleted = await this.storage.remove(req.params[0], preparedItems);
+        const isDeleted = await this.storage.remove(req.params[0]);
         if (isDeleted) {
           res.status(200).send();
         } else {
@@ -193,12 +189,12 @@ export default class MediaMixin extends Componentry.Module {
         }
         req.body._modified = new Date();
         let modifier = {
-          $set:req.body,
+          $set: req.body,
           $setOnInsert:{
-            status:"staged",
-            url:this.connector.profile.baseUrl+'/media/image/id/'+req.body._id,
-            _created:new Date(),
-            _createdBy:req.account.userId
+            status: StorageBridge.STAGED,
+            url: this.connector.profile.baseUrl + '/media/image/id/' + req.body._id,
+            _created: new Date(),
+            _createdBy: req.account.userId
           }
         }
         if (req.body.captured) modifier.$set.captured = new Date(req.body.captured);
@@ -215,21 +211,26 @@ export default class MediaMixin extends Componentry.Module {
       if (!req.account) return res.status(401).send();
 
       try {
-        let mediaItem = await this.collection.findOne({_id:req.params[0]},);
+        let mediaItem = await this.collection.findOne({_id:req.params[0]});
         if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
         let buffer = req.files.file.data;
         let fileType = req.files.file.mimetype;
         let file = `${mediaItem._id}.${fileType.split('/')[1]}`;
 
         // Normalize images into PNG and capture initial crop spec
-        if (fileType.startsWith("image/")) {
+        if (fileType.startsWith('image/')) {
           fileType = 'image/png';
 
           if (Object.keys(req.query).length === 0) {
-            let specForThumbnail = await this.storage.getSpec(mediaItem._id, {scale: '60,60,cover'});
-            let bufferThumbnail = await sharp(buffer,{failOnError: false});
-            bufferThumbnail = await specForThumbnail.process(bufferThumbnail);
-            await this.storage.putImage(mediaItem._id, specForThumbnail.path, fileType, bufferThumbnail);
+            const thumbnails = [{scale: '60,60,cover'}]
+
+            for (const thumbnail of thumbnails) {
+              let specForThumbnail = await this.storage.getSpec(mediaItem._id, thumbnail);
+              let bufferThumbnail = await sharp(buffer,{failOnError: false});
+              bufferThumbnail = await specForThumbnail.process(bufferThumbnail);
+              await this.storage.putImage(mediaItem._id, specForThumbnail.path, fileType, bufferThumbnail, false);
+              await this.storage.commitThumbnailOnDb(mediaItem._id, thumbnail)
+            }
           }
 
           let spec = await this.storage.getSpec(mediaItem._id, req.query);
@@ -249,14 +250,18 @@ export default class MediaMixin extends Componentry.Module {
     router.put('/media/stage/*',async (req,res) => {
       try {
         if (!req.account) return res.status(401).send();
+        const server = req.params[0] || 'aws'
 
-        const server = req.query['query'] || 'aws'
+        console.log('Request body:', req.body)
 
         switch (server) {
           case StorageBridge.AWS:
-            const response = await this.collection.insertOne({
+            await this.collection.insertOne({
               system: StorageBridge.AWS,
-              status: 'staged',
+              status: StorageBridge.STAGED,
+              thumbnails: [],
+              _createdBy: req.account.userId,
+              _created: new Date(),
               ...req.body
             })
             return res.status(201).json(req.body)

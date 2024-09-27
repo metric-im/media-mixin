@@ -11,6 +11,9 @@ export default class StorageBridge {
     static DATABASE = 'database'
     static STORJ = 'storj'
 
+    static LIVE = 'live'
+    static STAGED = 'staged'
+
     constructor(parent) {
         this.parent = parent;
         this.host = (process.env.MEDIA_STORAGE || 'aws').toLowerCase();
