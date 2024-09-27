@@ -34,18 +34,6 @@ export default class MediaMixin extends Componentry.Module {
     return instance;
   }
 
-  prepareItems(items) {
-    const preparedItems = []
-
-    for (const item of items.split(';')) {
-      if (item) {
-        const [key, val] = item.split(':')
-        preparedItems.push({[key]: val})
-      }
-    }
-    return preparedItems
-  }
-
   routes() {
     let router = express.Router();
     router.use(fileUpload({ limits: {fileSize: 50 * 1024 * 1024}}));

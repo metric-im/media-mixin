@@ -44,12 +44,12 @@ export default class AWSStorage extends StorageBridge {
     return Array.from(ids);
   }
 
-  async get(id, options) {
-    let spec = await super.getSpec(id, options);
+  async get(id, thumbnailOptions) {
+    let spec = await super.getSpec(id, thumbnailOptions);
     let test = new GetObjectCommand({Bucket: this.connector.profile.aws.s3_bucket, Key: spec.path})
     let response = await this.sendS3Request(test);
 
-    if (response.$metadata.httpStatusCode !== 200 && Object.keys(options).length > 0) {
+    if (response.$metadata.httpStatusCode !== 200 && Object.keys(thumbnailOptions).length > 0) {
 
       let mainSpec = await super.getSpec(id);
       let mainTest = new GetObjectCommand({Bucket: this.connector.profile.aws.s3_bucket, Key: mainSpec.path})
@@ -60,8 +60,8 @@ export default class AWSStorage extends StorageBridge {
         let bufferThumbnail = await sharp(buffer,{failOnError: false});
         bufferThumbnail = await spec.process(bufferThumbnail);
         await this.putImage(id, spec.path, 'image/png', bufferThumbnail, false);
-        await this.commitThumbnailOnDb(id, options)
-        return await this.get(id, options)
+        await this.commitThumbnailOnDb(id, thumbnailOptions)
+        return await this.get(id, thumbnailOptions)
       } else return null
 
     }
@@ -95,10 +95,10 @@ export default class AWSStorage extends StorageBridge {
     let spec = await super.getSpec(id);
     const objectsToDelete = [{Key: spec.path}]
 
-    const items = (await this.collection.findOne({_id: id}))?.thumbnails || []
+    const thumbnails = (await this.collection.findOne({_id: id}))?.thumbnails || []
 
-    for (const item of items) {
-      const tempSpec = await super.getSpec(id, item)
+    for (const thumbnail of thumbnails) {
+      const tempSpec = await super.getSpec(id, thumbnail)
       objectsToDelete.push({Key: tempSpec.path})
     }
 
@@ -150,14 +150,14 @@ export default class AWSStorage extends StorageBridge {
     return url;
   }
 
-  async commitThumbnailOnDb(id, options) {
+  async commitThumbnailOnDb(id, thumbnail) {
     let mediaItem = await this.collection.findOne({_id: id});
 
     if (mediaItem) {
       if (mediaItem.thumbnails) {
-        const count = mediaItem.thumbnails.filter(item => JSON.stringify(item) === JSON.stringify(options)).length
-        if (count === 0) mediaItem.thumbnails.push(options)
-      } else mediaItem.thumbnails = [options]
+        const count = mediaItem.thumbnails.filter(item => JSON.stringify(item) === JSON.stringify(thumbnail)).length
+        if (count === 0) mediaItem.thumbnails.push(thumbnail)
+      } else mediaItem.thumbnails = [thumbnail]
     }
 
     const res = await this.collection.updateOne({_id: id}, {$set: mediaItem})
@@ -189,10 +189,10 @@ export default class AWSStorage extends StorageBridge {
     const spec = await this.getSpec(id)
     const fileType = 'image/png';
 
-    const items = (await this.collection.findOne({_id: id}))?.thumbnails || []
+    const thumbnails = (await this.collection.findOne({_id: id}))?.thumbnails || []
 
-    for (const item of items) {
-      let specForThumbnail = await this.getSpec(id, item);
+    for (const thumbnail of thumbnails) {
+      let specForThumbnail = await this.getSpec(id, thumbnail);
       let bufferThumbnail = await sharp(buffer, {failOnError: false});
       bufferThumbnail = await specForThumbnail.process(bufferThumbnail);
       await this.putImage(id, specForThumbnail.path, fileType, bufferThumbnail, false);
