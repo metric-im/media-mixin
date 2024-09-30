@@ -7,7 +7,7 @@ export default class Uploader extends Componentry.Module {
     }
     routes() {
         let router = express.Router();
-        router.put("/media/stage/:system",async (req,res) => {
+        router.put("/media/stage/:system?",async (req,res) => {
             if (!req.account) return res.status(401).send();
             try {
                 let origin = req.body.origin || "upload"; // alternative is "url"

@@ -15,10 +15,10 @@ const stageImage = async (id, image) => {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body)
   };
-  let response = await fetch(`/media/stage/`, options);
-  let result = await response.json();
+  let response = await fetch(`/media/stage`, options);
 
   if(response.ok) {
+    let result = await response.json();
     return result
   } else {
     window.toast.error("something went wrong: " + result.message);

@@ -39,7 +39,7 @@ export default class StorageBridge {
         await this.parent.collection.deleteOne({_id:id});
     }
     async rotate(id) {
-        log.status('shouldnt be here')
+        console.log("shouldn't be here")
         // see inheritors
     }
 }
