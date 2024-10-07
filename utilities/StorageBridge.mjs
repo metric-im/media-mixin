@@ -4,6 +4,7 @@
  */
 import MediaManipulation from './MediaManipulation.mjs';
 import sharp from 'sharp';
+import {imagePresets} from "../../../components/Manifest.mjs";
 
 export default class StorageBridge {
 
@@ -18,6 +19,7 @@ export default class StorageBridge {
         this.parent = parent;
         this.host = (process.env.MEDIA_STORAGE || 'aws').toLowerCase();
         this.collection = parent.collection
+        this.imagePresets = imagePresets
     }
 
     static async mint(parent) {
@@ -52,7 +54,7 @@ export default class StorageBridge {
     }
 
     async rotate(id) {
-        log.status('shouldnt be here')
+        console.log('shouldnt be here')
         // see inheritors
     }
 }
