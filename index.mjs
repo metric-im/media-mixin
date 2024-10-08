@@ -206,19 +206,6 @@ export default class MediaMixin extends Componentry.Module {
                 // Normalize images into PNG and capture initial crop spec
                 if (fileType.startsWith('image/')) {
                     fileType = 'image/png';
-
-                    if (Object.keys(req.query).length === 0) {
-                        const thumbnails = [{scale: '60,60,cover'}]
-
-                        for (const thumbnail of thumbnails) {
-                            let specForThumbnail = await this.storage.getSpec(mediaItem._id, thumbnail);
-                            let bufferThumbnail = await sharp(buffer, {failOnError: false});
-                            bufferThumbnail = await specForThumbnail.process(bufferThumbnail);
-                            await this.storage.putImage(mediaItem._id, specForThumbnail.path, fileType, bufferThumbnail, false);
-                            await this.storage.commitThumbnailOnDb(mediaItem._id, thumbnail)
-                        }
-                    }
-
                     let spec = await this.storage.getSpec(mediaItem._id, req.query);
                     buffer = await sharp(buffer, {failOnError: false});
                     buffer = await spec.process(buffer);
