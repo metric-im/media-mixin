@@ -6,17 +6,17 @@
  */
 import express from 'express';
 import fileUpload from 'express-fileupload';
-import Componentry from "@metric-im/componentry";
+import Componentry from '@metric-im/componentry';
 import axios from 'axios'
 import sharp from 'sharp';
 import crypto from 'crypto';
 import StorageBridge from './utilities/StorageBridge.mjs';
-// import {Binary} from "mongodb";
+// import {Binary} from 'mongodb';
 
 export default class MediaMixin extends Componentry.Module {
   constructor(connector) {
     super(connector,import.meta.url)
-    this.maxImageWidth = parseInt(process.env.IMAGE_MAXWIDTH || "2048");
+    this.maxImageWidth = parseInt(process.env.IMAGE_MAXWIDTH || '2048');
     this.collection = this.connector.db.collection('media');
     this.pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
   }
@@ -28,18 +28,20 @@ export default class MediaMixin extends Componentry.Module {
   setCollection(name) {
     this.collection = this.connector.db.collection(name);
   }
+
   static async mint(connector) {
     let instance = new MediaMixin(connector);
     instance.storage = await StorageBridge.mint(instance); // an instance established by the environment is returned
     return instance;
   }
+
   routes() {
     let router = express.Router();
     router.use(fileUpload({ limits: {fileSize: 50 * 1024 * 1024}}));
     /**
      * List gets all items that match the path.
      */
-    router.get('/media/image/list/*',async (req,res)=>{
+    router.get('/media/image/list/*',async (req,res) => {
       try {
         let images = await this.storage.list(req.params[0]);
         // let result = images.map(({data,...washed}) => washed); // remove attributes not inteded for the client
@@ -48,6 +50,7 @@ export default class MediaMixin extends Componentry.Module {
         res.send(e.message)
       }
     })
+
     router.get('/media/image/url/*', async (req, res) => {
       try {
         const url = decodeURIComponent(req.params[0])
@@ -65,7 +68,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.get('/media/image/id/*',async (req,res)=> {
+
+    router.get('/media/image/id/*',async (req,res) => {
       try {
         let image = await this.storage.get(req.params[0],req.query);
         if (image) {
@@ -78,7 +82,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.get('/media/image/rotate/*',async (req,res)=> {
+
+    router.get('/media/image/rotate/*',async (req,res) => {
       try {
         await this.storage.rotate(req.params[0]);
         res.status(200).json({});
@@ -86,7 +91,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).json({});
       }
     });
-    router.delete('/media/image/*', async(req,res)=>{
+
+    router.delete('/media/image/*', async(req,res) => {
       try {
         await this.storage.remove(req.params[0]);
         res.status(200).send();
@@ -110,7 +116,7 @@ export default class MediaMixin extends Componentry.Module {
             await this.connector.profile.S3Client.send(new this.aws.PutObjectCommand({
               Bucket:this.connector.profile.aws.s3_bucket,
               Key: spec.path,
-              ContentType: "image/png",
+              ContentType: 'image/png',
               Body: image
             }))
             let data = Buffer.from(image, 'base64');
@@ -132,7 +138,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.get("/media/props/*",async (req,res)=>{
+
+    router.get('/media/props/*',async (req, res) => {
       try {
         let item = await this.storage.getItem(req.params[0]);
         if (item) {
@@ -144,7 +151,8 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     })
-    router.put("/media/props",async (req,res) => {
+
+    router.put('/media/props',async (req, res) => {
       if (!req.account) return res.status(401).send();
 
       try {
@@ -155,7 +163,7 @@ export default class MediaMixin extends Componentry.Module {
         let modifier = {
           $set:req.body,
           $setOnInsert:{
-            status:"staged",
+            status:'staged',
             url:this.connector.profile.baseUrl+'/media/image/id/'+req.body._id,
             _created:new Date(),
             _createdBy:req.account.userId
@@ -170,10 +178,11 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     })
-    router.put("/media/stage/:system?",async (req,res) => {
+
+    router.put('/media/stage/:system?',async (req, res) => {
       if (!req.account) return res.status(401).send();
       try {
-        let origin = req.body.origin || "upload"; // alternative is "url"
+        let origin = req.body.origin || 'upload'; // alternative is 'url'
         if (!req.body._id) req.body._id = this.connector.idForge.datedId();
 
         let ext = req.body.type.split('/')[1]
@@ -181,7 +190,7 @@ export default class MediaMixin extends Componentry.Module {
           $set:{
             system:req.params.system,
             origin:origin,
-            status:"staged",
+            status:'staged',
             _modified:new Date()
           },
           $setOnInsert:{
@@ -212,7 +221,7 @@ export default class MediaMixin extends Componentry.Module {
       }
     })
 
-    router.put('/media/upload/*',async (req,res)=>{
+    router.put('/media/upload/*',async (req, res) => {
       if (!req.account) return res.status(401).send();
 
       try {
@@ -223,7 +232,7 @@ export default class MediaMixin extends Componentry.Module {
         let file = `${mediaItem._id}.${fileType.split('/')[1]}`;
 
         // Normalize images into PNG and capture initial crop spec
-        if (fileType.startsWith("image/")) {
+        if (fileType.startsWith('image/')) {
           fileType = 'image/png';
           file = `${mediaItem._id}.png`;
 
@@ -238,16 +247,19 @@ export default class MediaMixin extends Componentry.Module {
         res.status(500).send();
       }
     });
-    router.get('/media/noimage',(req,res)=>{
-      res.set("Content-Type","image/gif");
+
+    router.get('/media/noimage',(req, res) => {
+      res.set('Content-Type','image/gif');
       res.contentLength = 43;
       res.end(this.pixel,'binary');
     })
+
     return router;
   }
-  notFound(req,res) {
+
+  notFound(req, res) {
     if (req.query.safe) {
-      res.set("Content-Type","image/gif");
+      res.set('Content-Type','image/gif');
       res.contentLength = 43;
       res.end(this.pixel,'binary');
     } else {

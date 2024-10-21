@@ -1,24 +1,27 @@
-import sharp from "sharp";
-import StorageBridge from "./StorageBridge.mjs";
-import { ListObjectsCommand,PutObjectCommand,GetObjectCommand,DeleteObjectsCommand, S3Client } from "@aws-sdk/client-s3";
+import sharp from 'sharp';
+import StorageBridge from './StorageBridge.mjs';
+import { ListObjectsCommand,PutObjectCommand,GetObjectCommand,DeleteObjectsCommand, S3Client } from '@aws-sdk/client-s3';
 
 export default class AWSStorage extends StorageBridge {
+
   constructor(parent) {
     super(parent);
     this.connector = parent.connector;
-    this.client = new S3Client({region:"eu-west-1"});
+    this.client = new S3Client({region:'eu-west-1'});
   }
+
   static async mint(parent) {
     let instance = new AWSStorage(parent);
     const errorResponse = {
-      "headers": {
-        "Location": `https://${parent.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
+      'headers': {
+        'Location': `https://${parent.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
       },
-      "statusCode": 302,
-      "isBase64Encoded": false
+      'statusCode': 302,
+      'isBase64Encoded': false
     };
     return instance;
   }
+
   async list(account) {
     let prefix = `media/${account}`;
     let test = new ListObjectsCommand({
@@ -33,7 +36,8 @@ export default class AWSStorage extends StorageBridge {
     }
     return Array.from(ids);
   }
-  async get(id,options) {
+
+  async get(id, options) {
     let spec = await super.getSpec(id, options);
     try {
       let test = new GetObjectCommand({Bucket: this.connector.profile.aws.s3_bucket, 'Key': spec.path})
@@ -48,7 +52,7 @@ export default class AWSStorage extends StorageBridge {
         await this.client.send(new PutObjectCommand({
           Bucket: this.connector.profile.aws.s3_bucket,
           Key: spec.path,
-          ContentType: "image/png",
+          ContentType: 'image/png',
           Body: image
         }))
         return Buffer.from(image, 'base64');
@@ -57,7 +61,8 @@ export default class AWSStorage extends StorageBridge {
       }
     }
   }
-  async putImage(id,file,fileType,buffer) {
+
+  async putImage(id, file, fileType, buffer) {
     // When the source image changes, delete prior variants, so they are reconstructed.
     let variants = this.client.send(new ListObjectsCommand({
       Bucket: this.connector.profile.aws.s3_bucket,
@@ -84,4 +89,5 @@ export default class AWSStorage extends StorageBridge {
     );
     return url;
   }
+
 }

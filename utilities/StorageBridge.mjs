@@ -26,13 +26,13 @@ export default class StorageBridge {
     async getItem(id) {
         return await this.parent.collection.findOne({_id:id});
     }
-    async getSpec(id,options) {
-        return new MediaManipulation(id,options);
+    async getSpec(id, options) {
+        return new MediaManipulation(id, options);
     }
-    async get(id,options) {
+    async get(id, options) {
 
     }
-    async putImage(id,image) {
+    async putImage(id, image) {
 
     }
     async remove(id) {
