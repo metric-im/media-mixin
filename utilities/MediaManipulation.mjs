@@ -1,5 +1,6 @@
 export default class MediaManipulation {
-    constructor(id,query) {
+
+    constructor(id, query) {
         this.isEmpty = true;
         this.id = id;
         if (query.crop) {
@@ -21,18 +22,22 @@ export default class MediaManipulation {
             this.isEmpty = false;
         }
     }
+
     toString() {
         let str = [];
         if (this.scale) str.push(`scale=${this.scale.width||0},${this.scale.height||0},${this.scale.fit}`);
         if (this.crop) str.push(`crop=${this.crop.x||''},${this.crop.y||''},${this.crop.width||''},${this.crop.height||''}`);
         return str.join('&');
     }
+
     get path() {
         return `media/${this.id}${(!this.isEmpty?'.'+this.toString():'')}.png`;
     }
+
     get rootPath() {
         return `media/${this.id}.png`;
     }
+
     async process(image) {
         try {
             if (this.scale) {
@@ -54,4 +59,5 @@ export default class MediaManipulation {
             throw new Error('image processing error: ' + e.message || e);
         }
     }
+
 }
