@@ -2,8 +2,8 @@ import sharp from "sharp";
 import StorageBridge from "./StorageBridge.mjs";
 
 export default class DatabaseStorage extends StorageBridge {
-  constructor(parent) {
-    super(parent);
+  constructor(parent, options) {
+    super(parent, options);
   }
   static async mint(parent) {
     return new DatabaseStorage(parent);

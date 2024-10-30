@@ -4,7 +4,6 @@
  */
 import MediaManipulation from './MediaManipulation.mjs';
 import sharp from 'sharp';
-import {imagePresets} from "../../../components/Manifest.mjs";
 
 export default class StorageBridge {
 
@@ -15,21 +14,21 @@ export default class StorageBridge {
     static LIVE = 'live'
     static STAGED = 'staged'
 
-    constructor(parent) {
+    constructor(parent, options) {
         this.parent = parent;
         this.host = (process.env.MEDIA_STORAGE || 'aws').toLowerCase();
         this.collection = parent.collection
-        this.imagePresets = imagePresets
+        this.imagePresets = options?.imagePresets || {}
     }
-    static async mint(parent) {
-        let instance = new StorageBridge(parent);
+    static async mint(parent, options) {
+        let instance = new StorageBridge(parent, options);
         this.handlers = {
             aws:"./AWSStorage.mjs",
             database:"./DatabaseStorage.mjs",
             storj:null
         };
         let handler = await import(this.handlers[instance.host])
-        return await handler.default.mint(parent);
+        return await handler.default.mint(parent, options);
     }
     async list(account){
         // see inheritors

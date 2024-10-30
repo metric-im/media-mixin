@@ -4,14 +4,14 @@ import { ListObjectsCommand,PutObjectCommand,GetObjectCommand,DeleteObjectsComma
 
 export default class AWSStorage extends StorageBridge {
 
-  constructor(parent) {
-    super(parent);
+  constructor(parent, options = {}) {
+    super(parent, options);
     this.connector = parent.connector;
     this.client = new S3Client({region:'eu-west-1'});
   }
 
-  static async mint(parent) {
-    let instance = new AWSStorage(parent);
+  static async mint(parent, options) {
+    let instance = new AWSStorage(parent, options);
     const errorResponse = {
       'headers': {
         'Location': `https://${parent.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
@@ -23,6 +23,7 @@ export default class AWSStorage extends StorageBridge {
   }
 
   async list(account) {
+    console.log(this.imagePresets)
     let prefix = `media/${account}`;
     let test = new ListObjectsCommand({
       Bucket:this.connector.profile.aws.s3_bucket,
@@ -97,12 +98,16 @@ export default class AWSStorage extends StorageBridge {
     }
 
     // Post the new object
-    let result = await this.client.send(new PutObjectCommand({
+    let response = await this.client.send(new PutObjectCommand({
       Bucket: this.connector.profile.aws.s3_bucket,
       Key: file, // for image === spec.path
       ContentType: fileType,
       Body: buffer
     }))
+
+    if (response.$metadata.httpStatusCode === 200) {
+      await this.collection.deleteOne({_id: id})
+    }
 
     let url = `https://${this.connector.profile.aws.s3_bucket}.s3.${this.connector.profile.aws.s3_region}.amazonaws.com/media/${file}`;
     return url;

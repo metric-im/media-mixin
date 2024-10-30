@@ -14,11 +14,12 @@ import StorageBridge from './utilities/StorageBridge.mjs';
 // import {Binary} from 'mongodb';
 
 export default class MediaMixin extends Componentry.Module {
-  constructor(connector) {
+  constructor(connector, options) {
     super(connector,import.meta.url)
     this.maxImageWidth = parseInt(process.env.IMAGE_MAXWIDTH || '2048');
     this.collection = this.connector.db.collection('media');
     this.pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
+    this.options = options
   }
 
   /**
@@ -29,9 +30,9 @@ export default class MediaMixin extends Componentry.Module {
     this.collection = this.connector.db.collection(name);
   }
 
-  static async mint(connector) {
-    let instance = new MediaMixin(connector);
-    instance.storage = await StorageBridge.mint(instance); // an instance established by the environment is returned
+  static async mint(connector, options = {}) {
+    let instance = new MediaMixin(connector, options);
+    instance.storage = await StorageBridge.mint(instance, options); // an instance established by the environment is returned
     return instance;
   }
 
@@ -192,70 +193,70 @@ export default class MediaMixin extends Componentry.Module {
       }
     })
 
-    // router.put('/media/stage/:system?',async (req, res) => {
-    //   if (!req.account) return res.status(401).send();
-    //   try {
-    //     let origin = req.body.origin || 'upload'; // alternative is 'url'
-    //     if (!req.body._id) req.body._id = this.connector.idForge.datedId();
-    //
-    //     console.log(req.body)
-    //
-    //     let ext = req.body.type.split('/')[1]
-    //     let modifier = {
-    //       $set:{
-    //         system:req.params.system,
-    //         origin:origin,
-    //         status:'staged',
-    //         _modified:new Date()
-    //       },
-    //       $setOnInsert:{
-    //         _created:new Date()
-    //       }
-    //     }
-    //     if (origin === 'upload') {
-    //       Object.assign(modifier.$set,{
-    //         file:req.body._id + '.' + ext,
-    //         type:req.body.type,
-    //         size:req.body.size,
-    //       })
-    //     } else if (origin === 'url') {
-    //       Object.assign(modifier.$set,{
-    //         file:req.body._id + '.png',
-    //         type:'image/png',
-    //         url:req.body.url
-    //       })
-    //     }
-    //     if (req.body.captured) modifier.$set.captured = req.body.captured;
-    //     if (req.account) modifier.$setOnInsert._createdBy = req.account.userId;
-    //
-    //     let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
-    //     res.json({_id:req.body._id,status:'staged'});
-    //   } catch (e) {
-    //     console.error(e);
-    //     res.status(500).send();
-    //   }
-    // })
+    router.put('/media/stage/:system?',async (req, res) => {
+      if (!req.account) return res.status(401).send();
+      try {
+        let origin = req.body.origin || 'upload'; // alternative is 'url'
+        if (!req.body._id) req.body._id = this.connector.idForge.datedId();
+
+        console.log(req.body)
+
+        let ext = req.body.type.split('/')[1]
+        let modifier = {
+          $set:{
+            system:req.params.system,
+            origin:origin,
+            status:'staged',
+            _modified:new Date()
+          },
+          $setOnInsert:{
+            _created:new Date()
+          }
+        }
+        if (origin === 'upload') {
+          Object.assign(modifier.$set,{
+            file:req.body._id + '.' + ext,
+            type:req.body.type,
+            size:req.body.size,
+          })
+        } else if (origin === 'url') {
+          Object.assign(modifier.$set,{
+            file:req.body._id + '.png',
+            type:'image/png',
+            url:req.body.url
+          })
+        }
+        if (req.body.captured) modifier.$set.captured = req.body.captured;
+        if (req.account) modifier.$setOnInsert._createdBy = req.account.userId;
+
+        let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
+        res.json({_id:req.body._id,status:'staged'});
+      } catch (e) {
+        console.error(e);
+        res.status(500).send();
+      }
+    })
 
     router.put('/media/upload/*',async (req, res) => {
       if (!req.account) return res.status(401).send();
 
       try {
-
+        let mediaItem = await this.collection.findOne({_id: req.params[0]});
+        if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
         let buffer = req.files.file.data;
         let fileType = req.files.file.mimetype;
-        let filePath = req.body.path;
-        const _id = req.body._id
+        let file = `${mediaItem._id}.${fileType.split('/')[1]}`;
 
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith('image/')) {
           fileType = 'image/png';
-          let spec = await this.storage.getSpec(filePath, req.query);
+          let spec = await this.storage.getSpec(mediaItem._id, req.query);
           buffer = await sharp(buffer, {failOnError: false});
           buffer = await spec.process(buffer);
-          filePath = spec.path
+          file = spec.path
         }
 
-        await this.storage.putImage(_id, filePath, fileType, buffer);
+        await this.storage.putImage(mediaItem._id, file, fileType, buffer);
         res.json({});
       } catch (e) {
         console.error('/media/upload/* error:', e);
