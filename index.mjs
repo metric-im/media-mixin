@@ -14,11 +14,12 @@ import StorageBridge from './utilities/StorageBridge.mjs';
 // import {Binary} from 'mongodb';
 
 export default class MediaMixin extends Componentry.Module {
-  constructor(connector) {
+  constructor(connector, options) {
     super(connector,import.meta.url)
     this.maxImageWidth = parseInt(process.env.IMAGE_MAXWIDTH || '2048');
     this.collection = this.connector.db.collection('media');
     this.pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
+    this.options = options
   }
 
   /**
@@ -29,9 +30,9 @@ export default class MediaMixin extends Componentry.Module {
     this.collection = this.connector.db.collection(name);
   }
 
-  static async mint(connector) {
-    let instance = new MediaMixin(connector);
-    instance.storage = await StorageBridge.mint(instance); // an instance established by the environment is returned
+  static async mint(connector, options = {}) {
+    let instance = new MediaMixin(connector, options);
+    instance.storage = await StorageBridge.mint(instance, options); // an instance established by the environment is returned
     return instance;
   }
 
@@ -79,24 +80,37 @@ export default class MediaMixin extends Componentry.Module {
         }
         else return this.notFound(req,res)
       } catch (e) {
+        console.log(e)
         res.status(500).send();
       }
     });
 
     router.get('/media/image/rotate/*',async (req,res) => {
       try {
-        await this.storage.rotate(req.params[0]);
+        const rotateDegree = +req.query?.rotateDegree
+        if (!rotateDegree) res.status(400).json({message: 'Set the query param rotateDegree!'})
+
+        await this.storage.rotate(req.params[0], rotateDegree);
         res.status(200).json({});
       } catch (e) {
+        console.log(e)
         res.status(500).json({});
       }
     });
 
     router.delete('/media/image/*', async(req,res) => {
       try {
-        await this.storage.remove(req.params[0]);
-        res.status(200).send();
-      } catch(e) {
+        const id = req.params[0]
+        if (!id) res.status(400).json({'message': 'Image id is required'})
+
+        const isDeleted = await this.storage.remove(req.params[0]);
+        if (isDeleted) {
+          res.status(200).send();
+        } else {
+          res.status(400).json({'message': 'Image was not found or unexpected error'})
+        }
+      } catch (e) {
+        console.log(e)
         res.status(500).send();
       }
     })
@@ -185,6 +199,8 @@ export default class MediaMixin extends Componentry.Module {
         let origin = req.body.origin || 'upload'; // alternative is 'url'
         if (!req.body._id) req.body._id = this.connector.idForge.datedId();
 
+        console.log(req.body)
+
         let ext = req.body.type.split('/')[1]
         let modifier = {
           $set:{
@@ -225,7 +241,7 @@ export default class MediaMixin extends Componentry.Module {
       if (!req.account) return res.status(401).send();
 
       try {
-        let mediaItem = await this.collection.findOne({_id:req.params[0]},);
+        let mediaItem = await this.collection.findOne({_id: req.params[0]});
         if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
         let buffer = req.files.file.data;
         let fileType = req.files.file.mimetype;
@@ -234,13 +250,13 @@ export default class MediaMixin extends Componentry.Module {
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith('image/')) {
           fileType = 'image/png';
-          file = `${mediaItem._id}.png`;
-
           let spec = await this.storage.getSpec(mediaItem._id, req.query);
-          buffer = await sharp(buffer,{failOnError: false});
+          buffer = await sharp(buffer, {failOnError: false});
           buffer = await spec.process(buffer);
+          file = spec.path
         }
-        let result = await this.storage.putImage(mediaItem._id,file,fileType,buffer);
+
+        await this.storage.putImage(mediaItem._id, file, fileType, buffer);
         res.json({});
       } catch (e) {
         console.error('/media/upload/* error:', e);
