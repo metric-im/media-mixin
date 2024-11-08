@@ -4,10 +4,14 @@ import { ListObjectsCommand,PutObjectCommand,GetObjectCommand,DeleteObjectsComma
 
 export default class AWSStorage extends StorageBridge {
 
-  constructor(parent, options = {}) {
+  constructor(parent, options = {}, initS3Client = true) {
     super(parent, options);
     this.connector = parent.connector;
-    this.client = new S3Client({region:'eu-west-1'});
+
+    if (initS3Client) {
+      this.bucketName = this.connector.profile.aws.s3_bucket
+      this.client = new S3Client({region:'eu-west-1'});
+    }
   }
 
   static async mint(parent, options) {
@@ -23,10 +27,9 @@ export default class AWSStorage extends StorageBridge {
   }
 
   async list(account) {
-    console.log(this.imagePresets)
     let prefix = `media/${account}`;
     let test = new ListObjectsCommand({
-      Bucket:this.connector.profile.aws.s3_bucket,
+      Bucket: this.bucketName,
       Prefix:prefix
     })
     let response = await this.client.send(test);
@@ -35,18 +38,19 @@ export default class AWSStorage extends StorageBridge {
       let id = record.Key.slice(record.Key.lastIndexOf('/')+1,record.Key.indexOf('.'));
       ids.add(id);
     }
+
     return Array.from(ids);
   }
 
   async get(id, options) {
     let spec = await super.getSpec(id, options);
-    let test = new GetObjectCommand({Bucket: this.connector.profile.aws.s3_bucket, Key: spec.path})
+    let test = new GetObjectCommand({Bucket: this.bucketName, Key: spec.path})
     let response = await this.sendS3Request(test);
 
     if (response.$metadata.httpStatusCode !== 200 && Object.keys(options).length > 0) {
 
       let mainSpec = await super.getSpec(id);
-      let mainTest = new GetObjectCommand({Bucket: this.connector.profile.aws.s3_bucket, Key: mainSpec.path})
+      let mainTest = new GetObjectCommand({Bucket: this.bucketName, Key: mainSpec.path})
       response = await this.sendS3Request(mainTest);
 
       if (response.$metadata.httpStatusCode === 200) {
@@ -87,19 +91,19 @@ export default class AWSStorage extends StorageBridge {
   async putImage(id, file, fileType, buffer) {
     // When the source image changes, delete prior variants, so they are reconstructed.
     let variants = this.client.send(new ListObjectsCommand({
-      Bucket: this.connector.profile.aws.s3_bucket,
+      Bucket: this.bucketName,
       Prefix: `media/${id}`,
     }));
     if (variants.Contents && variants.Contents.length > 0) {
       await this.client.send(new DeleteObjectsCommand({
-        Bucket: this.connector.profile.aws.s3_bucket,
+        Bucket: this.bucketName,
         Delete: {Objects: variants.Contents}
       }));
     }
 
     // Post the new object
     let response = await this.client.send(new PutObjectCommand({
-      Bucket: this.connector.profile.aws.s3_bucket,
+      Bucket: this.bucketName,
       Key: file, // for image === spec.path
       ContentType: fileType,
       Body: buffer
@@ -150,7 +154,7 @@ export default class AWSStorage extends StorageBridge {
     const prefix = spec.path.slice(0, spec.path.lastIndexOf('.'));
 
     const listCommand = new ListObjectsCommand({
-      Bucket: this.connector.profile.aws.s3_bucket,
+      Bucket:  this.bucketName,
       Prefix: prefix,
     });
     const listResponse = await this.client.send(listCommand);
@@ -163,9 +167,9 @@ export default class AWSStorage extends StorageBridge {
     if (!objectsToDelete) return false
     objectsToDelete = objectsToDelete.map(item => ({Key: item.Key}))
 
-    let test = new DeleteObjectsCommand({Bucket: this.connector.profile.aws.s3_bucket, Delete: {
+    let test = new DeleteObjectsCommand({Bucket: this.bucketName, Delete: {
         Objects: objectsToDelete,
-    }});
+      }});
 
     let response = await this.client.send(test);
     return response.$metadata.httpStatusCode === 200;

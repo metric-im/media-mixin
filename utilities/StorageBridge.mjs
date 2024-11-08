@@ -16,16 +16,16 @@ export default class StorageBridge {
 
     constructor(parent, options) {
         this.parent = parent;
-        this.host = (process.env.MEDIA_STORAGE || 'aws').toLowerCase();
+        this.host = (process.env.MEDIA_STORAGE || StorageBridge.AWS).toLowerCase();
         this.collection = parent.collection
         this.imagePresets = options?.imagePresets || {}
     }
     static async mint(parent, options) {
         let instance = new StorageBridge(parent, options);
         this.handlers = {
-            aws:"./AWSStorage.mjs",
-            database:"./DatabaseStorage.mjs",
-            storj:null
+            [this.AWS]:"./AWSStorage.mjs",
+            [this.DATABASE]:"./DatabaseStorage.mjs",
+            [this.STORJ]:"./StorjStorage.mjs",
         };
         let handler = await import(this.handlers[instance.host])
         return await handler.default.mint(parent, options);
