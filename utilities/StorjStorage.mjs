@@ -14,15 +14,7 @@ export default class StorjStorage extends AWSStorage {
     }
 
     static async mint(parent, options) {
-        let instance = new StorjStorage(parent, options);
-        const errorResponse = {
-            'headers': {
-                'Location': `https://${parent.connector.profile.S3_BUCKET}.s3.amazonaws.com/brokenImage.png`
-            },
-            'statusCode': 302,
-            'isBase64Encoded': false
-        };
-        return instance;
+        return new StorjStorage(parent, options);
     }
 }
 
