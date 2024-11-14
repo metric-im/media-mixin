@@ -1,45 +1,42 @@
 import MediaPresets from "../../components/MediaPresets.mjs";
-export default class MediaManipulation {
-    constructor(id,query={}) {
+export default class Parser {
+    constructor(root,label,spec,ext) {
         this.cropFromPreset = false
         this.scaleFromPreset = false
         this.isEmpty = true;
-        this.id = id;
+        if (typeof spec === 'string') {
+            let parts = spec.split('&').map(o=>o.split('='))
+            spec = Object.fromEntries(parts);
+        }
 
-        if (query.crop) {
-            let data = query.crop.split(',');
+        if (spec.crop) {
+            let data = spec.crop.split(',');
             this.prepareCropPayload(data)
             this.isEmpty = false;
         }
 
-        if (query.scale) {
-            let data = query.scale.split(',');
+        if (spec.scale) {
+            let data = spec.scale.split(',');
             this.prepareScalePayload(data)
             this.isEmpty = false;
         }
 
-        if (MediaPresets.query.map(item => item._id).includes(query.preset)) {
-            let options = imagePresets.find(item => item._id === query.preset).options
-            options = Object.fromEntries(new URLSearchParams(options).entries())
-            this.preset = query.preset
-
-            if (options?.crop) {
+        if (spec.label && MediaPresets[spec.label]) {
+            let options = Object.fromEntries(new URLSearchParams(MediaPresets[spec.label].options).entries())
+            if (options.get('crop')) {
                 this.cropFromPreset = true
                 let data = options.crop.split(',');
                 this.prepareCropPayload(data)
                 this.isEmpty = false;
             }
-
-            if (options?.scale) {
+            if (options.get('scale')) {
                 this.scaleFromPreset = true
                 let data = options.scale.split(',');
                 this.prepareScalePayload(data)
                 this.isEmpty = false;
             }
 
-            this.isEmpty = false;
         }
-
     }
 
     toString() {
@@ -57,7 +54,7 @@ export default class MediaManipulation {
     }
 
     get rootPath() {
-        return `media/${this.id}.png`;
+        return `${this.id}.png`;
     }
 
     async process(image) {

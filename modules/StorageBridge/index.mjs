@@ -2,7 +2,7 @@
  * StorageHandler provides methods for accessing different mechanisms for
  * storing media.
  */
-import MediaManipulation from './MediaManipulation.mjs';
+import Parser from './Parser.mjs';
 import sharp from 'sharp';
 export default class StorageBridge {
     static AWS = 'aws'
@@ -35,7 +35,12 @@ export default class StorageBridge {
         return await this.parent.collection.findOne({_id:id});
     }
     async getSpec(id, options) {
-        return new MediaManipulation(id, options);
+        let parts = id.split('.');
+        let key = parts[0];
+        let spec = (parts.length > 2)?parts[1]:options;
+        let [root,label] = key.split('~');
+        let ext = parts.pop();
+        return new Parser(root, label, spec, ext);
     }
     async get(id, options) {
 
