@@ -1,28 +1,25 @@
-import {imagePresets} from "../../../components/Manifest.mjs";
-
+import MediaPresets from "../../components/MediaPresets.mjs";
 export default class MediaManipulation {
-
-    constructor(id,query) {
-
+    constructor(id,query={}) {
         this.cropFromPreset = false
         this.scaleFromPreset = false
         this.isEmpty = true;
         this.id = id;
 
-        if (query?.crop) {
+        if (query.crop) {
             let data = query.crop.split(',');
             this.prepareCropPayload(data)
             this.isEmpty = false;
         }
 
-        if (query?.scale) {
+        if (query.scale) {
             let data = query.scale.split(',');
             this.prepareScalePayload(data)
             this.isEmpty = false;
         }
 
-        if (imagePresets.map(item => item._id).includes(query?.preset)) {
-            let options = imagePresets.find(item => item._id === query?.preset).options
+        if (MediaPresets.query.map(item => item._id).includes(query.preset)) {
+            let options = imagePresets.find(item => item._id === query.preset).options
             options = Object.fromEntries(new URLSearchParams(options).entries())
             this.preset = query.preset
 

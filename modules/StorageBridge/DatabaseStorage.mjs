@@ -1,7 +1,7 @@
 import sharp from "sharp";
-import StorageBridge from "./StorageBridge.mjs";
+import Index from "./index.mjs";
 
-export default class DatabaseStorage extends StorageBridge {
+export default class DatabaseStorage extends Index {
   constructor(parent, options) {
     super(parent, options);
   }

@@ -4,9 +4,7 @@
  */
 import MediaManipulation from './MediaManipulation.mjs';
 import sharp from 'sharp';
-
 export default class StorageBridge {
-
     static AWS = 'aws'
     static DATABASE = 'database'
     static STORJ = 'storj'

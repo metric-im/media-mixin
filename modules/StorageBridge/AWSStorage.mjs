@@ -1,17 +1,17 @@
 import sharp from 'sharp';
-import StorageBridge from './StorageBridge.mjs';
+import Index from './index.mjs';
 import { ListObjectsCommand,PutObjectCommand,GetObjectCommand,DeleteObjectsCommand, S3Client } from '@aws-sdk/client-s3';
 
-export default class AWSStorage extends StorageBridge {
+export default class AWSStorage extends Index {
 
-  constructor(parent, options = {}, initS3Client = true) {
+  constructor(parent, options = {}) {
     super(parent, options);
     this.connector = parent.connector;
-
-    if (initS3Client) {
-      this.bucketName = this.connector.profile.aws.s3_bucket
-      this.client = new S3Client({region:'eu-west-1'});
-    }
+    this.initClient();
+  }
+  initClient() {
+    this.bucketName = this.connector.profile.aws.s3_bucket
+    this.client = new S3Client({region:this.connector.profile.aws.s3_region});
   }
 
   static async mint(parent, options) {
