@@ -208,7 +208,7 @@ continuous synchronization.
 ### File Names
 This is the format used for aws and similar file systems
 ```text
-sprague/lwy82j2yhpbkxpuh[.{label}][.customSpec].png
+sprague/lwy82j2yhpbkxpuh[.{label} | .customSpec].png
 -------|----------------|---------|------------|---
 acct id|    item id        label     options    ext
 ```
