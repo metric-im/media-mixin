@@ -94,10 +94,16 @@ export default class MediaMixin extends Componentry.Module {
 
     router.delete('/media/image/*', async(req,res) => {
       try {
-        const id = req.params[0]
-        if (!id) res.status(400).json({'message': 'Image id is required'})
-
-        const isDeleted = await this.storage.remove(req.params[0]);
+        if (!req.params[0]) res.status(400).json({'message': 'Image id is required'})
+        let prefix, ids;
+        let divider = req.params[0].lastIndexOf('/');
+        if (divider >= 0) {
+          prefix = req.params[0].slice(0,divider);
+          ids = req.params[0].slice(divider+1);
+        } else {
+          ids = req.params[0]
+        }
+        const isDeleted = await this.storage.remove(ids,prefix);
         if (isDeleted) {
           res.status(200).send();
         } else {

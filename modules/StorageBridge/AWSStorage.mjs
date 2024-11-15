@@ -27,8 +27,7 @@ export default class AWSStorage extends Index {
     return instance;
   }
 
-  async list(account) {
-    let prefix = `${account}`;
+  async list(prefix) {
     let test = new ListObjectsCommand({
       Bucket: this.bucketName,
       Prefix:prefix
@@ -140,16 +139,23 @@ export default class AWSStorage extends Index {
     return listResponse.Contents;
   }
 
-  async remove(id) {
-    let objectsToDelete = await this.getImages(id)
-    if (!objectsToDelete) return false
-    objectsToDelete = objectsToDelete.map(item => ({Key: item.Key}))
+  async remove(ids,path) {
+    if (!ids) return false;
+    if (typeof ids === 'string') ids = ids.split(',');
+    let files = [];
+    for (let id of ids) {
+      let listCommand = new ListObjectsCommand({
+        Bucket: this.bucketName,
+        Prefix:`${path?path+'/':''}${id}`
+      });
+      let response = await this.client.send(listCommand);
+      files = files.concat(response.Contents);
+    }
 
-    let test = new DeleteObjectsCommand({Bucket: this.bucketName, Delete: {
-        Objects: objectsToDelete,
-      }});
-
-    let response = await this.client.send(test);
+    let deleteCommand = new DeleteObjectsCommand({Bucket: this.bucketName, Delete: {
+      Objects: files,
+    }});
+    let response = await this.client.send(deleteCommand);
     return response.$metadata.httpStatusCode === 200;
   }
 }
