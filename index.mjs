@@ -1,8 +1,5 @@
 /**
- * Generic database services for mongo.
- *
- * To disallow access to certain collections, provide
- * middleware that filters /data/:collection
+ * File storage handler supporting multiple hosting architectures
  */
 import express from 'express';
 import fileUpload from 'express-fileupload';
@@ -10,16 +7,15 @@ import Componentry from '@metric-im/componentry';
 import axios from 'axios'
 import sharp from 'sharp';
 import crypto from 'crypto';
-import StorageBridge from './utilities/StorageBridge.mjs';
-// import {Binary} from 'mongodb';
+import StorageBridge from './modules/StorageBridge/index.mjs';
+import ImageProcessor from "./modules/StorageBridge/ImageProcessor.mjs";
 
 export default class MediaMixin extends Componentry.Module {
-  constructor(connector, options) {
+  constructor(connector) {
     super(connector,import.meta.url)
     this.maxImageWidth = parseInt(process.env.IMAGE_MAXWIDTH || '2048');
-    this.collection = this.connector.db.collection('media');
+    this.setCollection('media');
     this.pixel = new Buffer.from('R0lGODlhAQABAJAAAP8AAAAAACH5BAUQAAAALAAAAAABAAEAAAICBAEAOw==','base64');
-    this.options = options
   }
 
   /**
@@ -30,9 +26,9 @@ export default class MediaMixin extends Componentry.Module {
     this.collection = this.connector.db.collection(name);
   }
 
-  static async mint(connector, options = {}) {
-    let instance = new MediaMixin(connector, options);
-    instance.storage = await StorageBridge.mint(instance, options); // an instance established by the environment is returned
+  static async mint(connector) {
+    let instance = new MediaMixin(connector);
+    instance.storage = await StorageBridge.mint(instance);
     return instance;
   }
 
@@ -45,10 +41,10 @@ export default class MediaMixin extends Componentry.Module {
     router.get('/media/image/list/*',async (req,res) => {
       try {
         let images = await this.storage.list(req.params[0]);
-        // let result = images.map(({data,...washed}) => washed); // remove attributes not inteded for the client
         res.json(images);
       } catch(e) {
-        res.send(e.message)
+        console.error(e);
+        res.send(e.message);
       }
     })
 
@@ -61,7 +57,6 @@ export default class MediaMixin extends Componentry.Module {
         let spec = new Spec(key,req.query);
         let image = await sharp(buffer.data);
         image = await spec.process(image);
-
         res.set('Content-Type', 'image/png');
         res.send(image);
       } catch (e) {
@@ -88,8 +83,7 @@ export default class MediaMixin extends Componentry.Module {
     router.get('/media/image/rotate/*',async (req,res) => {
       try {
         const rotateDegree = +req.query?.rotateDegree
-        if (!rotateDegree) res.status(400).json({message: 'Set the query param rotateDegree!'})
-
+        if (!rotateDegree) res.status(400).json({message: 'Set the query param rotateDegree!'});
         await this.storage.rotate(req.params[0], rotateDegree);
         res.status(200).json({});
       } catch (e) {
@@ -100,10 +94,16 @@ export default class MediaMixin extends Componentry.Module {
 
     router.delete('/media/image/*', async(req,res) => {
       try {
-        const id = req.params[0]
-        if (!id) res.status(400).json({'message': 'Image id is required'})
-
-        const isDeleted = await this.storage.remove(req.params[0]);
+        if (!req.params[0]) res.status(400).json({'message': 'Image id is required'})
+        let prefix, ids;
+        let divider = req.params[0].lastIndexOf('/');
+        if (divider >= 0) {
+          prefix = req.params[0].slice(0,divider);
+          ids = req.params[0].slice(divider+1);
+        } else {
+          ids = req.params[0]
+        }
+        const isDeleted = await this.storage.remove(ids,prefix);
         if (isDeleted) {
           res.status(200).send();
         } else {
@@ -250,7 +250,7 @@ export default class MediaMixin extends Componentry.Module {
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith('image/')) {
           fileType = 'image/png';
-          let spec = await this.storage.getSpec(mediaItem._id, req.query);
+          let spec = new ImageProcessor(mediaItem._id, req.query);
           buffer = await sharp(buffer, {failOnError: false});
           buffer = await spec.process(buffer);
           file = spec.path
@@ -265,22 +265,16 @@ export default class MediaMixin extends Componentry.Module {
     });
 
     router.get('/media/noimage',(req, res) => {
-      res.set('Content-Type','image/gif');
-      res.contentLength = 43;
-      res.end(this.pixel,'binary');
+      this.notFound(req,res);
     })
 
     return router;
   }
 
   notFound(req, res) {
-    if (req.query.safe) {
-      res.set('Content-Type','image/gif');
-      res.contentLength = 43;
-      res.end(this.pixel,'binary');
-    } else {
-      res.status(404).send();
-    }
+    res.set('Content-Type','image/gif');
+    res.contentLength = 43;
+    res.end(this.pixel,'binary');
   }
 }
 

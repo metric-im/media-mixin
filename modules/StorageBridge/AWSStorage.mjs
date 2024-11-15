@@ -1,17 +1,18 @@
 import sharp from 'sharp';
-import StorageBridge from './StorageBridge.mjs';
+import Index from './index.mjs';
+import ImageProcessor from "./ImageProcessor.mjs";
 import { ListObjectsCommand,PutObjectCommand,GetObjectCommand,DeleteObjectsCommand, S3Client } from '@aws-sdk/client-s3';
 
-export default class AWSStorage extends StorageBridge {
+export default class AWSStorage extends Index {
 
-  constructor(parent, options = {}, initS3Client = true) {
+  constructor(parent, options = {}) {
     super(parent, options);
     this.connector = parent.connector;
-
-    if (initS3Client) {
-      this.bucketName = this.connector.profile.aws.s3_bucket
-      this.client = new S3Client({region:'eu-west-1'});
-    }
+    this.initClient();
+  }
+  initClient() {
+    this.bucketName = this.connector.profile.aws.s3_bucket
+    this.client = new S3Client({region:this.connector.profile.aws.s3_region});
   }
 
   static async mint(parent, options) {
@@ -26,8 +27,7 @@ export default class AWSStorage extends StorageBridge {
     return instance;
   }
 
-  async list(account) {
-    let prefix = `media/${account}`;
+  async list(prefix) {
     let test = new ListObjectsCommand({
       Bucket: this.bucketName,
       Prefix:prefix
@@ -43,13 +43,13 @@ export default class AWSStorage extends StorageBridge {
   }
 
   async get(id, options) {
-    let spec = await super.getSpec(id, options);
+    let spec = new ImageProcessor(id, options);
     let test = new GetObjectCommand({Bucket: this.bucketName, Key: spec.path})
     let response = await this.sendS3Request(test);
 
-    if (response.$metadata.httpStatusCode !== 200 && Object.keys(options).length > 0) {
+    if (response.$metadata.httpStatusCode !== 200) {
 
-      let mainSpec = await super.getSpec(id);
+      let mainSpec = new ImageProcessor(spec.id);
       let mainTest = new GetObjectCommand({Bucket: this.bucketName, Key: mainSpec.path})
       response = await this.sendS3Request(mainTest);
 
@@ -62,30 +62,7 @@ export default class AWSStorage extends StorageBridge {
       } else return null
 
     }
-
-    if (response.$metadata.httpStatusCode !== 200) return null
-
     return response.Body;
-
-    // response.Body.pipe(res); // TODO: return response
-
-    //! ________________
-    // let buffer = await axios(, {responseType: 'arraybuffer'}); // ! where should i get item ?
-    // let image = await sharp(buffer.data);
-    // image = await spec.process(image);
-    // if (image) {
-    //   await this.client.send(new PutObjectCommand({
-    //     Bucket: this.connector.profile.aws.s3_bucket,
-    //     Key: spec.path,
-    //     ContentType: 'image/png',
-    //     Body: image
-    //   }))
-    //   return Buffer.from(image, 'base64');
-    //   //!________________
-    // } else {
-    // return this.notFound(req, res);
-    // }
-
   }
 
   async putImage(id, file, fileType, buffer) {
@@ -139,7 +116,7 @@ export default class AWSStorage extends StorageBridge {
     image = await this.streamToBuffer(image)
     const buffer = await sharp(image).rotate(rotateDegree).toBuffer()
 
-    const spec = await this.getSpec(id)
+    const spec = new ImageProcessor(id)
     const fileType = 'image/png';
 
     const isDeleted = await this.remove(id)
@@ -149,29 +126,23 @@ export default class AWSStorage extends StorageBridge {
     return Boolean(url)
   }
 
-  async getImages(id) {
-    let spec = await super.getSpec(id);
-    const prefix = spec.path.slice(0, spec.path.lastIndexOf('.'));
+  async remove(ids,path) {
+    if (!ids) return false;
+    if (typeof ids === 'string') ids = ids.split(',');
+    let files = [];
+    for (let id of ids) {
+      let listCommand = new ListObjectsCommand({
+        Bucket: this.bucketName,
+        Prefix:`${path?path+'/':''}${id}`
+      });
+      let response = await this.client.send(listCommand);
+      files = files.concat(response.Contents);
+    }
 
-    const listCommand = new ListObjectsCommand({
-      Bucket:  this.bucketName,
-      Prefix: prefix,
-    });
-    const listResponse = await this.client.send(listCommand);
-
-    return listResponse.Contents;
-  }
-
-  async remove(id) {
-    let objectsToDelete = await this.getImages(id)
-    if (!objectsToDelete) return false
-    objectsToDelete = objectsToDelete.map(item => ({Key: item.Key}))
-
-    let test = new DeleteObjectsCommand({Bucket: this.bucketName, Delete: {
-        Objects: objectsToDelete,
-      }});
-
-    let response = await this.client.send(test);
+    let deleteCommand = new DeleteObjectsCommand({Bucket: this.bucketName, Delete: {
+      Objects: files,
+    }});
+    let response = await this.client.send(deleteCommand);
     return response.$metadata.httpStatusCode === 200;
   }
 }

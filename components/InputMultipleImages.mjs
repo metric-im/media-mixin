@@ -5,6 +5,7 @@ import API from './API.mjs';
 import {InputSelect} from './InputSelect.mjs';
 import {InputText,InputTextArea} from './InputText.mjs'
 import InputInlineTable from './InputInlineTable.mjs';
+import MediaPresets from './MediaPresets.mjs'
 export default class InputMultipleImages extends Component {
   constructor(props) {
     super(props);
@@ -68,7 +69,8 @@ export default class InputMultipleImages extends Component {
           {name:'layout',title:'Layout'}
         ]
       },detailsContainer);
-      let preset = await this.draw(InputSelect,{name:'preset',options:this.imagePresets,hideTitle:true},detailsContainer);
+      let presetOptions = Object.keys(MediaPresets).map(o => {return {name:o.name,value:o._id}});
+      let preset = await this.draw(InputSelect,{name:'preset',options:presetOptions,hideTitle:true},detailsContainer);
     } else {
       this.rotateButton.element.setAttribute('disabled',true);
       this.deleteButton.element.setAttribute('disabled',true);
@@ -234,7 +236,7 @@ class Job {
    */
   async stage(id) {
     let body = {
-      _id:`${this.parent.props.context.id}/${id}.image`,
+      _id:`${this.parent.props.context.id}/${id}`,
       type: this.file.type,
       size: this.file.size,
       captured: this.file.lastModified,

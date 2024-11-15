@@ -1,7 +1,8 @@
 import sharp from "sharp";
-import StorageBridge from "./StorageBridge.mjs";
+import Index from "./index.mjs";
+import ImageProcessor from "./ImageProcessor.mjs";
 
-export default class DatabaseStorage extends StorageBridge {
+export default class DatabaseStorage extends Index {
   constructor(parent, options) {
     super(parent, options);
   }
@@ -15,7 +16,7 @@ export default class DatabaseStorage extends StorageBridge {
     return list;
   }
   async get(id,options) {
-    let spec = await super.getSpec(id,options);
+    let spec = new ImageProcessor(id,options);
     let item = await this.getItem(id);
     let image = await sharp(Buffer.from(item.data,'base64'));
     image = await spec.process(image);
