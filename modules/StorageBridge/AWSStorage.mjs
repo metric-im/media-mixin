@@ -126,19 +126,6 @@ export default class AWSStorage extends Index {
     return Boolean(url)
   }
 
-  async getImages(id) {
-    let spec = new ImageProcessor(id);
-    const prefix = spec.path.slice(0, spec.path.lastIndexOf('.'));
-
-    const listCommand = new ListObjectsCommand({
-      Bucket:  this.bucketName,
-      Prefix: prefix,
-    });
-    const listResponse = await this.client.send(listCommand);
-
-    return listResponse.Contents;
-  }
-
   async remove(ids,path) {
     if (!ids) return false;
     if (typeof ids === 'string') ids = ids.split(',');
