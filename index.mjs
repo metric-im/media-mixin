@@ -8,6 +8,7 @@ import axios from 'axios'
 import sharp from 'sharp';
 import crypto from 'crypto';
 import StorageBridge from './modules/StorageBridge/index.mjs';
+import ImageProcessor from "./modules/StorageBridge/ImageProcessor.mjs";
 
 export default class MediaMixin extends Componentry.Module {
   constructor(connector) {
@@ -243,7 +244,7 @@ export default class MediaMixin extends Componentry.Module {
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith('image/')) {
           fileType = 'image/png';
-          let spec = await this.storage.getSpec(mediaItem._id, req.query);
+          let spec = new ImageProcessor(mediaItem._id, req.query);
           buffer = await sharp(buffer, {failOnError: false});
           buffer = await spec.process(buffer);
           file = spec.path

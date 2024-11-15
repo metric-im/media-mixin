@@ -149,12 +149,11 @@ Three storage bridges have been declared: aws, database, and storj. The chosen b
 provided with the environment variable, MEDIA_STORAGE. Only one bridge can be utilized
 for an installation.
 
-Storage implementations are found in `/utilities`. They inherit from StorageBridge.mjs
-which establishes a common interface.
+Storage implementations are found in `/modules/StorageBridge`. Each bridge inherits from Index
+which selects the bridge and establishes a common interface.
 
 * list(account)
 * getItem(id)
-* getSpec(id,options)
 * get(id,options)
 * putImage(id,image)
 * remove(id)
@@ -209,13 +208,13 @@ continuous synchronization.
 ### File Names
 This is the format used for aws and similar file systems
 ```text
-sprague/lwy82j2yhpbkxpuh[~{label}][.customSpec].png
+sprague/lwy82j2yhpbkxpuh[.{label}][.customSpec].png
 -------|----------------|---------|------------|---
 acct id|    item id        label     options    ext
 ```
 * Acct id (account id), translates to a folder or bucket.
 * Item id is the unique id for this file and hosts the original source of the item
-* Label (separated by tilde) is a variant of the source custom rendered to fit the target while improving the visual.
+* Label is a variant of the source custom rendered to fit the target while improving the visual.
 * Options is the same string as the query string that specified the custom rendering. It follows a period. It's optional
 * Ext is the item extension derived from the mime-type. It is the string following the last period
 
