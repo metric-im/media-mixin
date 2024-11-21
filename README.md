@@ -22,8 +22,9 @@ For example, Facebook expects images to be 960x600, Outbrain wants 640x480, the
 system console wants icons sized to 50x50.
 
 Facebook, Outbrain and Icon are all considered labelled variants of the original
-rendered to the default spec established in the application manifest. When asked
+rendered to the default spec established in the components/MediaPresets.mjs. When asked
 for the "facebook" variant you get the original auto-cropped and sized to fit 960x600.
+Override MediaPresets.mjs to extend or alter the standard presets.
 
 Note that once a network is referred an image url (as done when a campaign is created),
 they make a copy and never return the source provided.
@@ -235,11 +236,11 @@ image. These keywords would be stored in the json file for that image. For examp
 # source image
 lwy82j2yhpbkxpuh.png                        
 # rendered to the default Facebook spec
-lwy82j2yhpbkxpuh~FB.png                     
+lwy82j2yhpbkxpuh.FB.png                     
 # rendered to a custom spec for Outbrain
-lwy82j2yhpbkxpuh~OB.scale=640,480,cover&crop=20,80,20,0.png
+lwy82j2yhpbkxpuh.OB.scale=640,480,cover&crop=20,80,20,0.png
 # rendered to the default icon spec
-lwy82j2yhpbkxpuh~icon.png                   
+lwy82j2yhpbkxpuh.icon.png                   
 # json data relevant to this image
 lwy82j2yhpbkxpuh.json                       
 ```
