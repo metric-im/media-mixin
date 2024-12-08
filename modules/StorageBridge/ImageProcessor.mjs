@@ -5,6 +5,8 @@ export default class ImageProcessor {
         let parts = id.split('.');
         this.id = parts[0];
         this.preset = MediaPresets[parts[1]];
+        // Either preset modifier on id, or query string options, or preset default
+        // Else modifier on id, or query string options or none
         if (this.preset) options = parts[2] || options || this.preset.options;
         else options = parts[1] || options || {};
         this.spec = Object.fromEntries(new URLSearchParams(options).entries())

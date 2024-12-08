@@ -40,6 +40,12 @@ export default class StorageBridge {
     async putImage(id, image) {
 
     }
+    async putProps(id,props) {
+
+    }
+    async getProps(id,props) {
+
+    }
     async remove(id) {
         await this.parent.collection.deleteOne({_id:id});
     }

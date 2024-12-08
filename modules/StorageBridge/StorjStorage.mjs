@@ -11,7 +11,7 @@ export default class StorjStorage extends AWSStorage {
         super(parent, options);
     }
     initClient() {
-        this.bucketName = 'media';
+        this.bucketName = this.connector.profile.STORJ.BUCKET || 'media';
         this.client = new S3Client({
             credentials: {
                 accessKeyId: this.connector.profile.STORJ.ACCESS_KEY,

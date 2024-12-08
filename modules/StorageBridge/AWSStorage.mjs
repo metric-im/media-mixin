@@ -42,13 +42,26 @@ export default class AWSStorage extends Index {
     return Array.from(ids);
   }
 
-  async get(id, options) {
+  async get(keyName) {
+    let response = await this.client.send(new GetObjectCommand({Bucket: this.bucketName, Key: keyName}));
+    return response.Body;
+  }
+
+  async getJSON(keyName) {
+    let response = await this.client.send(new GetObjectCommand({Bucket: this.bucketName, Key: keyName+'.json'}));
+    var string = '';
+    return new Promise((resolve,reject)=>{
+      response.Body.on('data',function(data){string += data.toString()});
+      response.Body.on('end',function(){resolve(JSON.parse(string))});
+    })
+  }
+
+  async getImage(id, options) {
     let spec = new ImageProcessor(id, options);
     let test = new GetObjectCommand({Bucket: this.bucketName, Key: spec.path})
     let response = await this.sendS3Request(test);
 
     if (response.$metadata.httpStatusCode !== 200) {
-
       let mainSpec = new ImageProcessor(spec.id);
       let mainTest = new GetObjectCommand({Bucket: this.bucketName, Key: mainSpec.path})
       response = await this.sendS3Request(mainTest);
@@ -57,27 +70,38 @@ export default class AWSStorage extends Index {
         const buffer = await this.streamToBuffer(response.Body)
         let optimizedBuffer = await sharp(buffer,{failOnError: false});
         optimizedBuffer = await spec.process(optimizedBuffer);
-        await this.putImage(id, spec.path, 'image/png', optimizedBuffer);
-        return await this.get(id, options)
+        return await this.putImage(id, spec.path, 'image/png', optimizedBuffer);
       } else return null
-
     }
     return response.Body;
   }
 
+  async putJSON(id, data) {
+    let json = (typeof data === 'object')?JSON.stringify(data):data;
+    let response = await this.client.send(new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: id+'.json', // for image === spec.path
+      ContentType: 'application/json',
+      Body: json
+    }))
+  }
+
   async putImage(id, file, fileType, buffer) {
     // When the source image changes, delete prior variants, so they are reconstructed.
-    let variants = this.client.send(new ListObjectsCommand({
+    let variants = await this.client.send(new ListObjectsCommand({
       Bucket: this.bucketName,
-      Prefix: `media/${id}`,
+      Prefix: `${id}`,
     }));
-    if (variants.Contents && variants.Contents.length > 0) {
-      await this.client.send(new DeleteObjectsCommand({
-        Bucket: this.bucketName,
-        Delete: {Objects: variants.Contents}
-      }));
+    if (variants.Contents) {
+      // don't delete the properties file
+      let files = variants.Contents.filter((file)=>{!file.Key.endsWith('.json')});
+      if (files.length > 0) {
+        await this.client.send(new DeleteObjectsCommand({
+          Bucket: this.bucketName,
+          Delete: {Objects: files}
+        }));
+      }
     }
-
     // Post the new object
     let response = await this.client.send(new PutObjectCommand({
       Bucket: this.bucketName,
@@ -85,13 +109,9 @@ export default class AWSStorage extends Index {
       ContentType: fileType,
       Body: buffer
     }))
-
     if (response.$metadata.httpStatusCode === 200) {
-      await this.collection.deleteOne({_id: id})
+      return buffer;
     }
-
-    let url = `https://${this.connector.profile.aws.s3_bucket}.s3.${this.connector.profile.aws.s3_region}.amazonaws.com/media/${file}`;
-    return url;
   }
 
   async sendS3Request(option) {

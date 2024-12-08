@@ -67,11 +67,14 @@ export default class MediaMixin extends Componentry.Module {
 
     router.get('/media/image/id/*',async (req,res) => {
       try {
-        let image = await this.storage.get(req.params[0],req.query);
+        let image = await this.storage.getImage(req.params[0],req.query);
         if (image) {
           res.set('Content-Type', 'image/png');
-          image.pipe(res); //TODO: this breaks DatabaseStorage
-//          res.send(image);
+          if (image instanceof Uint8Array) { // There must be a better way to differentiate or normalize
+            res.send(image);
+          } else {
+            image.pipe(res);
+          }
         }
         else return this.notFound(req,res)
       } catch (e) {
@@ -155,38 +158,21 @@ export default class MediaMixin extends Componentry.Module {
 
     router.get('/media/props/*',async (req, res) => {
       try {
-        let item = await this.storage.getItem(req.params[0]);
-        if (item) {
-          delete item.data;
-          return res.json(item);
-        }
+        let item = await this.storage.getJSON(req.params[0]);
+        if (item) return res.json(item);
         else return this.notFound(req,res)
       } catch (e) {
-        res.status(500).send();
+        res.status(400).send();
       }
     })
 
     router.put('/media/props',async (req, res) => {
       if (!req.account) return res.status(401).send();
-
+      if (!req.body._id) return res.status(404).send();
       try {
-        if (!req.body._id) {
-          req.body._id = this.connector.idForge.datedId();
-        }
         req.body._modified = new Date();
-        let modifier = {
-          $set:req.body,
-          $setOnInsert:{
-            status:'staged',
-            url:this.connector.profile.baseUrl+'/media/image/id/'+req.body._id,
-            _created:new Date(),
-            _createdBy:req.account.userId
-          }
-        }
-        if (req.body.captured) modifier.$set.captured = new Date(req.body.captured);
-
-        let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
-        res.json({_id:req.body._id,status:req.body.status});
+        this.storage.putJSON(req.body._id, req.body);
+        res.status(201).send();
       } catch (e) {
         console.error(e);
         res.status(500).send();
@@ -196,41 +182,22 @@ export default class MediaMixin extends Componentry.Module {
     router.put('/media/stage/:system?',async (req, res) => {
       if (!req.account) return res.status(401).send();
       try {
-        let origin = req.body.origin || 'upload'; // alternative is 'url'
-        if (!req.body._id) req.body._id = this.connector.idForge.datedId();
-
-        console.log(req.body)
-
-        let ext = req.body.type.split('/')[1]
-        let modifier = {
-          $set:{
-            system:req.params.system,
-            origin:origin,
-            status:'staged',
-            _modified:new Date()
-          },
-          $setOnInsert:{
-            _created:new Date()
-          }
+        let props = {};
+        props.origin = req.body.origin || 'upload'; // alternative is 'url'
+        props._id = req.body._id || this.connector.idForge.datedId();
+        props.ext = req.body.type.split('/')[1];
+        props._created = new Date();
+        props._createdBy = req.account.userId;
+        if (req.body.captured) props.captured = req.body.captured;
+        if (props.origin === 'upload') {
+          props.type = req.body.type;
+          props.size = req.body.size;
+        } else if (props.origin === 'url') {
+          props.type = 'image/png';
+          props.url = req.body.url;
         }
-        if (origin === 'upload') {
-          Object.assign(modifier.$set,{
-            file:req.body._id + '.' + ext,
-            type:req.body.type,
-            size:req.body.size,
-          })
-        } else if (origin === 'url') {
-          Object.assign(modifier.$set,{
-            file:req.body._id + '.png',
-            type:'image/png',
-            url:req.body.url
-          })
-        }
-        if (req.body.captured) modifier.$set.captured = req.body.captured;
-        if (req.account) modifier.$setOnInsert._createdBy = req.account.userId;
-
-        let result = await this.collection.findOneAndUpdate({_id:req.body._id},modifier,{upsert:true});
-        res.json({_id:req.body._id,status:'staged'});
+        await this.storage.putJSON(props._id,props);
+        res.json({_id:props._id,status:'staged'});
       } catch (e) {
         console.error(e);
         res.status(500).send();
@@ -241,22 +208,24 @@ export default class MediaMixin extends Componentry.Module {
       if (!req.account) return res.status(401).send();
 
       try {
-        let mediaItem = await this.collection.findOne({_id: req.params[0]});
-        if (!mediaItem) return res.status(400).send(`${req.params[0]} has not been staged`);
+        let itemId = req.params[0];
+        if (!itemId) return res.status(400).send(`${req.params[0]} has not been staged`);
         let buffer = req.files.file.data;
         let fileType = req.files.file.mimetype;
-        let file = `${mediaItem._id}.${fileType.split('/')[1]}`;
+        let file = `${itemId}.${fileType.split('/')[1]}`;
 
         // Normalize images into PNG and capture initial crop spec
         if (fileType.startsWith('image/')) {
           fileType = 'image/png';
-          let spec = new ImageProcessor(mediaItem._id, req.query);
+          let spec = new ImageProcessor(itemId, req.query);
           buffer = await sharp(buffer, {failOnError: false});
           buffer = await spec.process(buffer);
           file = spec.path
+          await this.storage.putImage(itemId, file, fileType, buffer);
+        } else {
+          await this.storage.put(itemId, file, fileType, buffer);
         }
 
-        await this.storage.putImage(mediaItem._id, file, fileType, buffer);
         res.json({});
       } catch (e) {
         console.error('/media/upload/* error:', e);
