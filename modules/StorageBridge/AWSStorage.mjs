@@ -33,27 +33,46 @@ export default class AWSStorage extends Index {
       Prefix:prefix
     })
     let response = await this.client.send(test);
-    let ids = new Set();
+    let items = {};
     for (let record of response.Contents||[]) {
-      let id = record.Key.slice(record.Key.lastIndexOf('/')+1,record.Key.indexOf('.'));
-      ids.add(id);
+      let [key,_id,qualifier] = record.Key.match(/(.*\/[a-zA-Z0-9]+)\.(.*)/)||[];
+      let [type,spec] = qualifier.split('.').reverse();
+      if (!items[_id]) items[_id] = {_id:_id,variants:{}}
+      items[_id].variants[spec] = {type:type,spec:spec};
+      if (type === 'json') {
+        let properties = await this.getJSON(_id)
+        Object.assign(items[_id],properties);
+      }
     }
-
-    return Array.from(ids);
+    return items;
   }
 
   async get(keyName) {
-    let response = await this.client.send(new GetObjectCommand({Bucket: this.bucketName, Key: keyName}));
-    return response.Body;
+    let response = await this.sendS3Request(new GetObjectCommand({Bucket: this.bucketName, Key: keyName}));
+    if (response.$metadata.httpStatusCode === 200) return await this.streamToBuffer(response.Body);
+    else return null;
+  }
+  async put(keyName,buffer,type) {
+    let response = await this.client.send(new PutObjectCommand({
+      Bucket: this.bucketName,
+      Key: keyName,
+      ContentType: type,
+      Body: buffer
+    }))
+    if (response.$metadata.httpStatusCode === 200) return buffer;
+    else return null;
   }
 
   async getJSON(keyName) {
-    let response = await this.client.send(new GetObjectCommand({Bucket: this.bucketName, Key: keyName+'.json'}));
-    var string = '';
-    return new Promise((resolve,reject)=>{
-      response.Body.on('data',function(data){string += data.toString()});
-      response.Body.on('end',function(){resolve(JSON.parse(string))});
-    })
+    try {
+      const command = new GetObjectCommand({Bucket: this.bucketName, Key: keyName+'.json'})
+      const response = await this.sendS3Request(command);
+      if (response.$metadata.httpStatusCode === 200) {
+        const buffer = await this.streamToBuffer(response.Body)
+        return JSON.parse(buffer.toString());
+      }
+    } catch(e) {}
+    return {};
   }
 
   async getImage(id, options) {
@@ -62,15 +81,18 @@ export default class AWSStorage extends Index {
     let response = await this.sendS3Request(test);
 
     if (response.$metadata.httpStatusCode !== 200) {
+      let spec = await ImageProcessor.fromSpec(id,options,this)
       let mainSpec = new ImageProcessor(spec.id);
       let mainTest = new GetObjectCommand({Bucket: this.bucketName, Key: mainSpec.path})
       response = await this.sendS3Request(mainTest);
-
       if (response.$metadata.httpStatusCode === 200) {
-        const buffer = await this.streamToBuffer(response.Body)
-        let optimizedBuffer = await sharp(buffer,{failOnError: false});
-        optimizedBuffer = await spec.process(optimizedBuffer);
-        return await this.putImage(id, spec.path, 'image/png', optimizedBuffer);
+        spec.properties = await this.getJSON(spec.id);
+        let buffer = await this.streamToBuffer(response.Body)
+        buffer = await sharp(buffer,{failOnError: false});
+        spec.buffer = await spec.process(buffer);
+        await spec.save(this);
+        buffer = await spec.buffer.toBuffer();
+        return buffer;
       } else return null
     }
     return response.Body;

@@ -186,6 +186,7 @@ export default class MediaMixin extends Componentry.Module {
         props.origin = req.body.origin || 'upload'; // alternative is 'url'
         props._id = req.body._id || this.connector.idForge.datedId();
         props.ext = req.body.type.split('/')[1];
+        //TODO: keep created fields if this is replacing an existing root image
         props._created = new Date();
         props._createdBy = req.account.userId;
         if (req.body.captured) props.captured = req.body.captured;
@@ -209,23 +210,13 @@ export default class MediaMixin extends Componentry.Module {
 
       try {
         let itemId = req.params[0];
-        if (!itemId) return res.status(400).send(`${req.params[0]} has not been staged`);
-        let buffer = req.files.file.data;
-        let fileType = req.files.file.mimetype;
-        let file = `${itemId}.${fileType.split('/')[1]}`;
-
-        // Normalize images into PNG and capture initial crop spec
-        if (fileType.startsWith('image/')) {
-          fileType = 'image/png';
-          let spec = new ImageProcessor(itemId, req.query);
-          buffer = await sharp(buffer, {failOnError: false});
-          buffer = await spec.process(buffer);
-          file = spec.path
-          await this.storage.putImage(itemId, file, fileType, buffer);
-        } else {
-          await this.storage.put(itemId, file, fileType, buffer);
-        }
-
+        if (!itemId) return res.status(400).send(`no identifier provided`);
+        let properties = await this.storage.getJSON(itemId);
+        if (!properties) return res.status(400).send(`${itemId} has not been staged`);
+        await this.storage.remove(itemId);
+        let imageProcessor = await ImageProcessor.fromUpload(itemId,req.files.file)
+        imageProcessor.properties = properties
+        await imageProcessor.save(this.storage);
         res.json({});
       } catch (e) {
         console.error('/media/upload/* error:', e);

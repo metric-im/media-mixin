@@ -53,6 +53,8 @@
 .item-properties {
     display:flex;
     flex:.5 0;
+    flex-direction: row;
+    flex-wrap:wrap;
     margin:var(--spacer);
     position:relative;
 }
@@ -65,16 +67,13 @@
     position:relative;
     cursor:pointer;
 }
-.properties-image-container img {
-    position:absolute;
-    top:0;
-    left:0;
-    width:100%;
-}
 .properties-details-container {
     flex:0;
-    margin-left:var(--spacer);
+    margin-right:var(--spacer);
 }
 .properties-details-container h2 {
     margin-top:0;
+}
+.properties-details-container input,select {
+    width:100%;
 }

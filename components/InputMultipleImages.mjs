@@ -3,8 +3,10 @@ import {Button} from './Button.mjs';
 import IdForge from './IdForge.mjs';
 import API from './API.mjs';
 import {InputSelect} from './InputSelect.mjs';
+import {InputText} from './InputText.mjs'
 import MediaPresets from './MediaPresets.mjs'
 import ToolTip from "./ToolTip.mjs";
+import ImageEditor from "./ImageEditor.mjs";
 
 export default class InputMultipleImages extends Component {
   constructor(props) {
@@ -26,20 +28,20 @@ export default class InputMultipleImages extends Component {
     this.dropBox.ondragover = this.dragHandler.bind(this);
     this.dropBox.onclick = await this.clickHandler.bind(this);
     this.dropBox.onwheel = await this.wheelHandler.bind(this);
-    for (let id of this.imageIds) this.dropBox.append(this.createIcon(id));
+    for (let key of Object.keys(this.images)) this.dropBox.append(this.createIcon(this.images[key]._id));
     this.toolTip = await this.draw(ToolTip,{text:"Drop images. Ctrl-wheel to zoom. Click for details"},this.dropBox);
     this.itemProperties = this.div('item-properties',this.content);
   }
   createIcon(id) {
     let img = document.createElement('img');
-    img.src = `media/image/id/${this.props.context.id}/${id}.icon`;
+    img.src = `media/image/id/${id}.icon`;
     img.id = id;
     img.classList.add("fixed");
     img.style.width = `${this.scale}%`;
     return img;
   }
   async load() {
-    this.imageIds = await API.get('/media/image/list/'+this.props.context.id);
+    this.images = await API.get('/media/image/list/'+this.props.context.id);
   }
   async dropHandler(event) {
     event.preventDefault();
@@ -57,28 +59,36 @@ export default class InputMultipleImages extends Component {
   }
   async renderProperties(id) {
     this.itemProperties.innerHTML = '';
-    let imageContainer = this.div('properties-image-container',this.itemProperties);
-    imageContainer.innerHTML = 'Loading...';
-    let img = document.createElement('img');
-    img.src = `media/image/id/${this.props.context.id}/${id}`;
-    img.onclick = (e)=>window.open(img.src,'media');
-    imageContainer.append(img);
     let detailsContainer = this.div('properties-details-container',this.itemProperties);
-    detailsContainer.innerHTML = `<h2>${id}</h2>`;
+    detailsContainer.innerHTML = `<h3>${id}</h3>`;
     let presetOptions = Object.values(MediaPresets).map(o => {return {name:o.name,value:o._id}});
     presetOptions.unshift({name:'',value:''});
-    let preset = await this.draw(InputSelect,{name:'preset',options:presetOptions,hideTitle:true},detailsContainer);
+    let preset = await this.draw(InputSelect,{name:'preset',options:presetOptions},detailsContainer);
     preset.element.addEventListener('change',(e)=>{
-      img.src = `media/image/id/${this.props.context.id}/${id}.${preset.value}`;
+      img.src = `media/image/id/${id}.${preset.value}`;
     })
+    let scale = await this.draw(InputText,{name:'scale',title:'scale X,Y (pixels)'},detailsContainer);
+    let crop = await this.draw(InputText,{name:'crop',title:'crop X,Y,H,W (ratio 0 to 1)'},detailsContainer);
+    let imageContainer = this.div('properties-image-container',this.itemProperties);
+    this.imageEditor = await this.draw(ImageEditor,{id:id,context:this.props.context},imageContainer);
     this.itemControls.innerHTML = '';
     await this.draw(Button,{name:'rotate',title:'Rotate'},this.itemControls);
     await this.draw(Button,{name:'delete',title:'Delete',icon:'trash',onClick:async ()=>{
         if (await window.toast.prompt('Confirm delete of '+id)) {
-          await API.remove(`/media/image/${this.props.context.id}/${id}`);
+          await API.remove(`/media/image/${id}`);
           await this.render();
         }
       }},this.itemControls);
+  }
+  async handleUpdate(attributeName) {
+    await super.handleUpdate(attributeName);
+    if (attributeName === 'preset') {
+
+    } else if (attributeName === 'scale') {
+
+    } else if (attributeName === 'crop') {
+
+    }
   }
   dragHandler(event) {
     event.preventDefault();
@@ -109,7 +119,7 @@ class Job {
     this.element = element;
     this.file = file;
     this.status = Job.NEW;
-    this.id = IdForge.datedId();
+    this.id = this.parent.props.context.id+'/'+IdForge.datedId();
     this.img = document.createElement('img');
     this.img.src = URL.createObjectURL(this.file);
     this.img.style.clipPath = "circle(0%)";
@@ -127,7 +137,7 @@ class Job {
    */
   async stage() {
     let body = {
-      _id:`${this.parent.props.context.id}/${this.id}`,
+      _id:this.id,
       type: this.file.type,
       size: this.file.size,
       captured: this.file.lastModified

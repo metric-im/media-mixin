@@ -1,0 +1,37 @@
+. {
+    position:absolute;
+    left:0;
+    top:0;
+    bottom:0;
+    right:0;
+}
+.base-image {
+    position:absolute;
+    object-fit: contain;
+    opacity:0.4;
+}
+.crop-image {
+    position:absolute;
+    object-fit: contain;
+}
+/*IMG {*/
+/*    position:absolute;*/
+/*    width:100%;*/
+/*    box-sizing: border-box;*/
+/*    width:100%;*/
+/*    object-fit: contain;*/
+/*    border:4px solid chartreuse;*/
+/*}*/
+.controls {
+    border:3px solid green;
+    background-position: center;
+}
+.image-crop-sizer {
+    position:absolute;
+    left:0;
+    top:0;
+    right:0;
+    bottom:0;
+    border:4px solid chartreuse;
+    background-color:transparent;
+}
